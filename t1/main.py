@@ -4,22 +4,42 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
-    coords = utils.create_graph(50, 4000)
+    vertices = 200
+    max_weight = 400
+    coords = utils.create_graph(vertices, max_weight)
     # # for solution in sa.solutions:
-    alpha = 0.8
-    stopping_T = 0.001
-    sa = SimAnneal(coords, stopping_iter=100000, T=1, stopping_T=stopping_T, alpha=alpha)
+    alpha = 0.9999
+    stopping_T = 1
+    stopping_iter = 32000
+    T = 100000
+    sa = SimAnneal(coords, stopping_iter=stopping_iter, T=T, stopping_T=stopping_T, alpha=alpha, biggest_length=max_weight)
     #     print(f"Path: {solution.Path}, Distance: {solution.Distance}")
     # print(f"Guloso: {sa.solutions[0].Path}, Distance: {sa.solutions[0].Distance}")
     # print(f"{sa.best.Path}, Distance: {sa.best.Distance}")
-    while sa.solutions[0].Distance <= sa.best.Distance:
+    N = 100
+    while sa.solutions[0].Distance <= sa.best.Distance or N > 0:
+        sa = SimAnneal(coords, stopping_iter=stopping_iter, T=T, stopping_T=stopping_T, alpha=alpha, biggest_length=max_weight)
+        alpha *= 0.9
+        print('qt de solutions: ', len(sa.solutions))
+        print("melhor -------------------------")
+        print(f"Diferença para o guloso: {(sa.best.Distance - sa.solutions[0].Distance) / sa.solutions[0].Distance * 100:.2f}%")
+        print(f"stopping T: {sa.stopping_T}")
         print(f"Iterações: {sa.number_of_iterations}")
-        alpha = alpha / 2
         print(f"Alpha: {alpha}")
         print(f"Distance: {sa.best.Distance}")
         print(f"Temp: {sa.best.Temperature}")
-        sa = SimAnneal(coords, stopping_iter=100000, T=1, stopping_T=stopping_T, alpha=alpha)
-    print("Anneal é melhor")
+        print("end melhor -------------------------")
+        print("ultimo -------------------------")
+        print(f"Diferença para o guloso: {(sa.solutions[len(sa.solutions)-1].Distance - sa.solutions[0].Distance) / sa.solutions[0].Distance * 100:.2f}%")
+        print(f"stopping T: {sa.stopping_T}")
+        print(f"Iterações: {sa.number_of_iterations}")
+        print(f"Alpha: {alpha}")
+        print(f"T: {T}")
+        print(f"Distance: {sa.solutions[len(sa.solutions)-1].Distance}")
+        print(f"Temp: {sa.solutions[len(sa.solutions)-1].Temperature}")
+        print("end ultimo -------------------------")
+        N -= 1
+
     # edges = utils.create_networkX_edges_from_solution_path(sa.solutions[0].Path, coords)
     # G = nx.DiGraph()
     # G.add_weighted_edges_from(edges)

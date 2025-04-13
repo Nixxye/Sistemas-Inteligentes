@@ -7,7 +7,7 @@ from copy import deepcopy
 
 
 class SimAnneal(object):
-    def __init__(self, coords, T=1, alpha=0.95, stopping_T=0.001, stopping_iter=500):
+    def __init__(self, coords, T=1, alpha=0.95, stopping_T=0.001, stopping_iter=500, biggest_length=10):
         self.coords = coords
         self.n = len(coords)
         self.T = T
@@ -17,6 +17,7 @@ class SimAnneal(object):
         self.best = None
         self.solutions = []
         self.number_of_iterations = 1
+        self.biggest_length = biggest_length
         self.hungry()
         self.anneal()
 
@@ -41,8 +42,10 @@ class SimAnneal(object):
         #new_solution.Distance = solution.Distance - self.coords[antI][i] - self.coords[antJ][j] + self.coords[antI][j] + self.coords[antJ][i]
         return new_solution
 
-    def acceptance_probability(self, temperature):
-        return random.random() < temperature
+    def acceptance_probability(self, temperature, delta):
+        #print(delta)
+        return random.random() < math.exp(delta / self.biggest_length / temperature)
+
 
     def anneal(self):
         iteration = 1
@@ -57,7 +60,7 @@ class SimAnneal(object):
                 if (new_solution.Distance < self.best.Distance):
                     self.best = new_solution
             # Se não for melhor, joga um dado:
-            elif self.acceptance_probability(self.T):
+            elif self.acceptance_probability(self.T, (self.solutions[len(self.solutions)-1].Distance - new_solution.Distance)):
                 self.T = self.T * self.alpha
                 new_solution.Temperature = self.T
                 self.solutions.append(new_solution)
@@ -68,7 +71,7 @@ class SimAnneal(object):
         None
     
     def hungry(self):
-        solution = Solution(self.n)
+        solution = Solution(self.T, self.alpha, None)
         solution.Path.append(0)  # Começa no nó inicial
         column = 0
         
