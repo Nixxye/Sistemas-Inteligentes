@@ -29,7 +29,15 @@ def create_networkX_edges_from_matrix(matrix):
 
     return edges
 
-def create_networkX_edges_from_solution_path(path):
+def create_networkX_edges_from_solution_path(path, matrix):
     edges = []
-    for vertice in path:
-        edges.append()
+    for index in range(len(path) - 1):
+        edges.append((path[index], path[index + 1], matrix[path[index]][path[index + 1]]))
+    return edges
+
+def calculate_solution_distance(path, matrix):
+    cost = 0
+    for index in range(len(path)-1):
+        cost += matrix[path[index]][path[index+1]]
+    return cost
+        
