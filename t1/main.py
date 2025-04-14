@@ -9,7 +9,7 @@ from solution import Solution
 import random
 
 if __name__ == "__main__":
-    vertices = 100
+    vertices = 50
     max_weight = 800
     if input("type 1 to read from csv") == "1":
         coords = utils.read_csv_matrix("coord.csv")
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # # for solution in sa.solutions:
     alpha = 1e4
     stopping_T = 10e-16
-    stopping_iter = 10e3
+    stopping_iter = 2e4
     T = 10e1
     sa = SimAnneal(
         coords,
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     print(f"Execution time of hungry(): {end - start:.6f} seconds")
     sa.current_solution = sa.solutions[0]
     hh = sa.solutions[0]
-    while N < 200:
+    while N < 20:
         sa = SimAnneal(
             coords,
             stopping_iter=stopping_iter,
