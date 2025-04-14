@@ -1,44 +1,111 @@
-from anneal import SimAnneal
-import utils
-import networkx as nx
+import math
+import time
+
 import matplotlib.pyplot as plt
+import networkx as nx
+import utils
+from anneal import SimAnneal
+from solution import Solution
+import random
 
 if __name__ == "__main__":
-    vertices = 200
-    max_weight = 400
-    coords = utils.create_graph(vertices, max_weight)
+    vertices = 100
+    max_weight = 800
+    if input("type 1 to read from csv") == "1":
+        coords = utils.read_csv_matrix("coord.csv")
+        print("reading from csv")
+    else:
+        coords = utils.create_graph(vertices, max_weight)
+        utils.write_matrix_to_csv(coords, "coord.csv")
+    printable = 1 if input("type 1 to plot the results") == "1" else 2
+
     # # for solution in sa.solutions:
-    alpha = 0.9999
-    stopping_T = 1
-    stopping_iter = 32000
-    T = 100000
-    sa = SimAnneal(coords, stopping_iter=stopping_iter, T=T, stopping_T=stopping_T, alpha=alpha, biggest_length=max_weight)
+    alpha = 1e4
+    stopping_T = 10e-16
+    stopping_iter = 10e3
+    T = 10e1
+    sa = SimAnneal(
+        coords,
+        stopping_iter=stopping_iter,
+        T=T,
+        stopping_T=stopping_T,
+        alpha=alpha,
+        biggest_length=max_weight,
+    )
     #     print(f"Path: {solution.Path}, Distance: {solution.Distance}")
     # print(f"Guloso: {sa.solutions[0].Path}, Distance: {sa.solutions[0].Distance}")
     # print(f"{sa.best.Path}, Distance: {sa.best.Distance}")
-    N = 100
-    while sa.solutions[0].Distance <= sa.best.Distance or N > 0:
-        sa = SimAnneal(coords, stopping_iter=stopping_iter, T=T, stopping_T=stopping_T, alpha=alpha, biggest_length=max_weight)
-        alpha *= 0.9
-        print('qt de solutions: ', len(sa.solutions))
+    N = 0
+    media = 0
+    sa = SimAnneal(
+        coords,
+        stopping_iter=stopping_iter,
+        T=T,
+        stopping_T=stopping_T,
+        alpha=alpha,
+        biggest_length=max_weight,
+    )
+    start = time.time()
+    sa.hungry()
+    end = time.time()
+    print(f"Execution time of hungry(): {end - start:.6f} seconds")
+    sa.current_solution = sa.solutions[0]
+    hh = sa.solutions[0]
+    while N < 200:
+        sa = SimAnneal(
+            coords,
+            stopping_iter=stopping_iter,
+            T=T,
+            stopping_T=stopping_T,
+            alpha=alpha,
+            biggest_length=max_weight,
+        )
+        sa.solutions.append(hh)
+        sa.current_solution = hh
+        # sa.current_solution = Solution()
+        # sa.current_solution.Path = list(range(sa.n))
+        # random.shuffle(sa.current_solution.Path)
+        # sa.current_solution.Distance = utils.calculate_solution_distance(
+        #     sa.current_solution.Path, sa.coords
+        # )
+        start = time.time()
+        sa.anneal()
+        end = time.time()
+        print(f"Execution time of anneal(): {end - start:.6f} seconds")
+
+        print("qt de solutions: ", len(sa.solutions))
+        print("guloso -------------------------")
+        print(f"Distance: {hh.Distance}")
+        print("end guloso -------------------------")
         print("melhor -------------------------")
-        print(f"Diferença para o guloso: {(sa.best.Distance - sa.solutions[0].Distance) / sa.solutions[0].Distance * 100:.2f}%")
-        print(f"stopping T: {sa.stopping_T}")
-        print(f"Iterações: {sa.number_of_iterations}")
-        print(f"Alpha: {alpha}")
+        print(
+            f"Diferença para o guloso: {(sa.best.Distance - hh.Distance) / hh.Distance * 100:.2f}%"
+        )
         print(f"Distance: {sa.best.Distance}")
         print(f"Temp: {sa.best.Temperature}")
         print("end melhor -------------------------")
-        print("ultimo -------------------------")
-        print(f"Diferença para o guloso: {(sa.solutions[len(sa.solutions)-1].Distance - sa.solutions[0].Distance) / sa.solutions[0].Distance * 100:.2f}%")
-        print(f"stopping T: {sa.stopping_T}")
-        print(f"Iterações: {sa.number_of_iterations}")
-        print(f"Alpha: {alpha}")
-        print(f"T: {T}")
-        print(f"Distance: {sa.solutions[len(sa.solutions)-1].Distance}")
-        print(f"Temp: {sa.solutions[len(sa.solutions)-1].Temperature}")
-        print("end ultimo -------------------------")
-        N -= 1
+        # print("ultimo -------------------------")
+        # print(
+        #     f"Diferença para o guloso: {(sa.solutions[len(sa.solutions)-1].Distance - sa.solutions[0].Distance) / sa.solutions[0].Distance * 100:.2f}%"
+        # )
+        # print(f"Iterações: {sa.number_of_iterations}")
+        # print(f"Distance: {sa.solutions[len(sa.solutions)-1].Distance}")
+        # print(f"Temp: {sa.solutions[len(sa.solutions)-1].Temperature}")
+        # print("end ultimo -------------------------")
+        # print("Temperatura no final das iterações: ", sa.T)
+        N += 1
+        if printable == 1:
+            x = range(len(sa.solutions))
+            y = [sol.Distance for sol in sa.solutions]
+            colors = ["green" if val == sa.best.Distance else "red" if val < hh.Distance else "blue" for val in y]
+            plt.scatter(x, y, c=colors, s=10)
+            plt.xlabel("iteration")
+            plt.ylabel("distance")
+            plt.title("Distance X Iteration")
+            plt.legend()
+            plt.show()
+        media += (sa.best.Distance - hh.Distance) / hh.Distance * 100
+    print(f"média em N: {media/N}%")
 
     # edges = utils.create_networkX_edges_from_solution_path(sa.solutions[0].Path, coords)
     # G = nx.DiGraph()
