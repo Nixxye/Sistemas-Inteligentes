@@ -8,7 +8,7 @@ import utils
 from solution import GASolution
 
 class GA:
-    def __init__(self, coords, slice, mutation_rate, population_size, generations):
+    def __init__(self, coords, slice, mutation_rate, population_size, generations, elitism_rate=10):
         self.coords = coords
         self.slice = slice
         self.mutation_rate = mutation_rate
@@ -16,6 +16,7 @@ class GA:
         self.generations = generations
         self.population = []
         self.best_solution = None
+        self.elitism_rate = elitism_rate
         self.n = len(coords)
 
         self.init_population()
@@ -37,46 +38,61 @@ class GA:
 
     def sex(self):
         new_population = []
-        total_distance = 0
-        for s in self.population:
-            total_distance += s.Distance
 
-        prob = self.calculate_sex_chance(total_distance)
-        
-        for i in range(len(self.population)//2):
+        distances = [s.Distance for s in self.population]
+        max_dist = max(distances)
+
+        deltas = [max((max_dist - d), 1e-6) ** 7 for d in distances]
+        prob = [d for d in deltas]
+
+        # --- Etapa 1: Elitismo - copiar os 10% melhores ---
+        if self.elitism_rate > 0:
+            elite_count = max(1, len(self.population) // self.elitism_rate)
+            elites = sorted(self.population, key=lambda x: x.Distance)[:elite_count]
+            new_population.extend(deepcopy(elites))  # deepcopy para evitar alterações nas elites
+
+        # --- Reprodução para preencher o restante da população ---
+        while len(new_population) < self.population_size:
             parent_a = random.choices(self.population, weights=prob, k=1)[0]
-            parent_b = random.choices(self.population, weights=prob, k=1)[0]
+            population_without_parent_a = [sol for sol in self.population if sol != parent_a]
+            prob_without_parent_a = [p for i, p in enumerate(prob) if self.population[i] != parent_a]
+            parent_b = random.choices(population_without_parent_a, weights=prob_without_parent_a, k=1)[0]
 
             child_a, child_b = self.cross_over(parent_a, parent_b)
 
             if random.random() < self.mutation_rate:
                 self.mutation(child_a)
+            if random.random() < self.mutation_rate:
                 self.mutation(child_b)
 
-            if len(child_a.Path) == self.n:
-                child_a.Distance = utils.calculate_solution_distance(
-                    child_a.Path, self.coords
-                )
-            if len(child_b.Path) == self.n:
-                child_b.Distance = utils.calculate_solution_distance(
-                    child_b.Path, self.coords
-                )
-            new_population.append(child_a)
-            new_population.append(child_b)
-        
-        best_in_population = min(new_population, key=lambda x: x.Distance)
+            for child in [child_a, child_b]:
+                if len(child.Path) == self.n:
+                    child.Distance = utils.calculate_solution_distance(child.Path, self.coords)
+                    new_population.append(child)
+                    if len(new_population) >= self.population_size:
+                        break
+
+        # --- Etapa 2: Remover os 10% piores soluções ---
+        new_population = sorted(new_population, key=lambda x: x.Distance)
+        if self.elitism_rate > 0:
+            removal_count = max(1, len(new_population) // self.elitism_rate)
+            new_population = new_population[:-removal_count]
+
+        # Atualiza best_solution
+        best_in_population = new_population[0]
+        melhora = (self.best_solution.Distance - best_in_population.Distance) / self.best_solution.Distance * 100
+        if melhora != 0:
+            print(f"Melhor solução da geração é : {melhora:.2f}% melhor do que a anterior")
         if best_in_population.Distance < self.best_solution.Distance:
             self.best_solution = best_in_population
-        # substitui a população antiga pela noav
-        self.population = new_population
-            
-    def calculate_sex_chance(self, total_distance):
-        prob = []
-        for solution in self.population:
-            solution.chance = 1 - solution.Distance / total_distance
-            prob.append(solution.chance)
-        return prob
 
+        # Preenche novamente se precisar completar o tamanho
+        while len(new_population) < self.population_size:
+            new_population.append(deepcopy(best_in_population))
+
+        self.population = new_population
+
+            
 
     def cross_over(self, solution_a, solution_b):
         inicio = random.randint(0, self.n - 1)
@@ -110,6 +126,7 @@ class GA:
 
 
     def mutation(self, solution):
+        # Troca dois genes de lugar
         i, j = random.sample(range(self.n), 2)
 
         solution.Path[i], solution.Path[j] = (

@@ -121,5 +121,4 @@ class SimAnneal(object):
             self.solutions.append(solution)
             # self.best = solution
             return solution.Path
-
         return "ERROR: solution not found"
