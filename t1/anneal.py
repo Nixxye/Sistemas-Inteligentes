@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import utils
-from solution import Solution
+from solution import TSolution
 
 
 class SimAnneal(object):
@@ -93,7 +93,7 @@ class SimAnneal(object):
         None
 
     def hungry(self):
-        solution = Solution(self.T, self.alpha, None)
+        solution = TSolution(self.T, self.alpha, None)
         solution.Path.append(0)  # Começa no nó inicial
         column = 0
 
