@@ -29,11 +29,11 @@ class SimAnneal(object):
         self.number_of_iterations = 1
         self.biggest_length = biggest_length
         self.current_solution = None
-        # self.current_solution = Solution()
-        # self.current_solution.Path = list(range(self.n))
-        # self.current_solution.Distance = utils.calculate_solution_distance(
-        #     self.current_solution.Path, coords
-        # )
+        self.current_solution = TSolution()
+        self.current_solution.Path = self.hungry()
+        self.current_solution.Distance = utils.calculate_solution_distance(
+            self.current_solution.Path, coords
+        )
 
     def swap_vertices(self, solution):
         new_solution = deepcopy(solution)

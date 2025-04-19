@@ -12,29 +12,31 @@ import random
 if __name__ == "__main__":
     vertices = 50
     max_weight = 800
-    if input("type 1 to read from csv") == "1":
-        coords = utils.read_csv_matrix("coord.csv")
-        print("reading from csv")
-    else:
-        coords = utils.create_graph(vertices, max_weight)
-        utils.write_matrix_to_csv(coords, "coord.csv")
-    printable = 1 if input("type 1 to plot the results") == "1" else 2
-    ga = GA(coords, 10, 0.3, 10, 100)
-    for solution in ga.population:
-        print(solution.Path, solution.Distance)
+    coords = utils.create_graph(vertices, max_weight)
+    ga = GA(coords, slice=int(vertices/2), mutation_rate=0.1, population_size=100, generations=1000)
+    for  solution in ga.population:
+        print(f"Solução", solution.Path, solution.Distance)
+    
+    print(f"Melhor solução AG: {ga.best_solution.Distance}")
+    
 
-    # alpha = 1e4
-    # stopping_T = 10e-16
-    # stopping_iter = 2e4
-    # T = 10e1
-    # sa = SimAnneal(
-    #     coords,
-    #     stopping_iter=stopping_iter,
-    #     T=T,
-    #     stopping_T=stopping_T,
-    #     alpha=alpha,
-    #     biggest_length=max_weight,
-    # )
+
+    alpha = 1e4
+    stopping_T = 10e-16
+    stopping_iter = 2e4
+    T = 10e1
+    sa = SimAnneal(
+        coords,
+        stopping_iter=stopping_iter,
+        T=T,
+        stopping_T=stopping_T,
+        alpha=alpha,
+        biggest_length=max_weight,
+    )
+
+    sa.anneal()
+    
+    print(f"Melhor solução Tempera: {sa.best.Distance}")
 
     # N = 0
     # media = 0

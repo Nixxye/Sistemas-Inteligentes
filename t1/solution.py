@@ -11,4 +11,5 @@ class GASolution:
         self.Slice = slice
         self.Distance = distance
         self.Path = path
+        self.chance = 0
         pass
