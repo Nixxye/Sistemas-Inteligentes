@@ -27,9 +27,6 @@ class GA:
         for _ in range(self.population_size):
             path = random.sample(range(self.n), self.n)
             solution = GASolution(path, self.slice)
-            print(len(solution.Path)) 
-            print(self.n)
-            print()
             if len(solution.Path) == self.n:
                 solution.Distance = utils.calculate_solution_distance(
                     solution.Path, self.coords
@@ -62,25 +59,32 @@ class GA:
 
     def cross_over(self, solution_a, solution_b):
         inicio = random.randint(0, self.n - 1)
-        new_solution_a = list(itertools.islice(itertools.cycle(solution_a.path), inicio, inicio + self.slice))
+        new_solution_a_path = list(itertools.islice(itertools.cycle(solution_a.Path), inicio, inicio + self.slice))
 
-        last_elem = new_solution_a[-1]
-        index = solution_b.path.index(last_elem) + 1
-        for i in range(len(solution_b.path)):
-            gene = solution_b.path[(index + i) % len(solution_b.path)]
-            if gene not in new_solution_a:
-                new_solution_a.append(gene)
+        last_elem = new_solution_a_path[-1]
+        index = solution_b.Path.index(last_elem) + 1
+        for i in range(len(solution_b.Path)):
+            gene = solution_b.Path[(index + i) % len(solution_b.Path)]
+            if gene not in new_solution_a_path:
+                new_solution_a_path.append(gene)
 
-        new_solution_b = list(itertools.islice(itertools.cycle(solution_b.path), inicio, inicio + self.slice))
+        if len(new_solution_a_path) == self.n:
+            distance_a = utils.calculate_solution_distance(
+                new_solution_a_path, self.coords
+            )
+        new_solution_b_path = list(itertools.islice(itertools.cycle(solution_b.Path), inicio, inicio + self.slice))
+        last_elem = new_solution_b_path[-1]
+        index = solution_a.Path.index(last_elem) + 1
+        for i in range(len(solution_a.Path)):
+            gene = solution_a.Path[(index + i) % len(solution_a.Path)]
+            if gene not in new_solution_b_path:
+                new_solution_b_path.append(gene)
 
-        last_elem = new_solution_b[-1]
-        index = solution_a.path.index(last_elem) + 1
-        for i in range(len(solution_a.path)):
-            gene = solution_a.path[(index + i) % len(solution_a.path)]
-            if gene not in new_solution_b:
-                new_solution_b.append(gene)
-
-        return GASolution(new_solution_a), GASolution(new_solution_b)
+        if len(new_solution_b_path) == self.n:
+            distance_b = utils.calculate_solution_distance(
+                new_solution_b_path, self.coords
+            )
+        return GASolution(new_solution_a_path), GASolution(new_solution_b_path)
 
 
 
