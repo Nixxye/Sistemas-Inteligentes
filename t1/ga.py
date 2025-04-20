@@ -8,7 +8,7 @@ import utils
 from solution import GASolution
 
 class GA:
-    def __init__(self, coords, slice, mutation_rate, population_size, generations, elitism_rate=10):
+    def __init__(self, coords, slice, mutation_rate, population_size, generations, elitism_rate=10, cota_rate=0.8):
         self.coords = coords
         self.slice = slice
         self.mutation_rate = mutation_rate
@@ -17,6 +17,7 @@ class GA:
         self.population = []
         self.best_solution = None
         self.elitism_rate = elitism_rate
+        self.cota_rate = cota_rate
         self.n = len(coords)
 
         self.init_population()
@@ -58,7 +59,10 @@ class GA:
             prob_without_parent_a = [p for i, p in enumerate(prob) if self.population[i] != parent_a]
             parent_b = random.choices(population_without_parent_a, weights=prob_without_parent_a, k=1)[0]
 
-            child_a, child_b = self.cross_over(parent_a, parent_b)
+            if random.random() < self.cota_rate:
+                child_a, child_b = self.cross_over_with_cotas(parent_a, parent_b)
+            else: 
+                child_a, child_b = self.cross_over(parent_a, parent_b)
 
             if random.random() < self.mutation_rate:
                 self.mutation(child_a)
@@ -123,6 +127,35 @@ class GA:
             )
         return GASolution(new_solution_a_path, distance_a), GASolution(new_solution_b_path, distance_b)
 
+    # Crossover da fatia com a menor distância
+    def cross_over_with_cotas(self, solution_a, solution_b):
+        def best_slice_from_solution(solution):
+            best_slice = None
+            best_distance = float("inf")
+
+            for i in range(self.n):
+                slice_indices = [(i + j) % self.n for j in range(self.slice)]
+                slice_path = [solution.Path[idx] for idx in slice_indices]
+                dist = utils.calculate_solution_distance(slice_path, self.coords)
+                if dist < best_distance:
+                    best_distance = dist
+                    best_slice = slice_path
+            return best_slice
+
+        # Melhor fatia de solution_a
+        slice_a = best_slice_from_solution(solution_a)
+        # Complementa com o restante de solution_b
+        child_a_path = slice_a[:] + [gene for gene in solution_b.Path if gene not in slice_a]
+        distance_a = utils.calculate_solution_distance(child_a_path, self.coords)
+
+        # Melhor fatia de solution_b
+        slice_b = best_slice_from_solution(solution_b)
+        # Complementa com o restante de solution_a
+        child_b_path = slice_b[:] + [gene for gene in solution_a.Path if gene not in slice_b]
+        distance_b = utils.calculate_solution_distance(child_b_path, self.coords)
+
+        return GASolution(child_a_path, distance_a), GASolution(child_b_path, distance_b)
+      
 
 
     def mutation(self, solution):
