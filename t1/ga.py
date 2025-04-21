@@ -8,7 +8,7 @@ import utils
 from solution import GASolution
 
 class GA:
-    def __init__(self, coords, slice, mutation_rate, population_size, generations, elitism_rate=10, cota_rate=0.8):
+    def __init__(self, coords, slice, mutation_rate, population_size, generations, elitism_rate=10, cota_rate=0.8, reset_threshold=15, reset_ratio=0.3):
         self.coords = coords
         self.slice = slice
         self.mutation_rate = mutation_rate
@@ -16,8 +16,13 @@ class GA:
         self.generations = generations
         self.population = []
         self.best_solution = None
+        self.best_in_last_population = None
         self.elitism_rate = elitism_rate
         self.cota_rate = cota_rate
+        self.no_improvement_counter = 0
+        self.reset_threshold = reset_threshold  # Número de gerações sem melhora antes de resetar parcialmente
+        self.reset_ratio = reset_ratio     # Porcentagem da população a ser resetada
+
         self.n = len(coords)
 
         self.init_population()
@@ -36,6 +41,18 @@ class GA:
                 self.population.append(solution)
 
         self.best_solution = min(self.population, key=lambda x: x.Distance)
+
+    def partial_reset(self):
+        reset_count = int(self.population_size * self.reset_ratio)
+        for _ in range(reset_count):
+            path = random.sample(range(self.n), self.n)
+            solution = GASolution(path, self.slice)
+            if len(solution.Path) == self.n:
+                solution.Distance = utils.calculate_solution_distance(solution.Path, self.coords)
+                self.population.append(solution)
+
+        # Remove os piores para manter o tamanho
+        self.population = sorted(self.population, key=lambda x: x.Distance)[:self.population_size]
 
     def sex(self):
         new_population = []
@@ -85,10 +102,23 @@ class GA:
         # Atualiza best_solution
         best_in_population = new_population[0]
         melhora = (self.best_solution.Distance - best_in_population.Distance) / self.best_solution.Distance * 100
-        if melhora != 0:
-            print(f"Melhor solução da geração é : {melhora:.2f}% melhor do que a anterior")
+        # if melhora != 0:
+        #     print(f"Melhor solução da geração é : {melhora:.2f}% melhor do que a anterior")
+
         if best_in_population.Distance < self.best_solution.Distance:
             self.best_solution = best_in_population
+
+        if self.best_in_last_population is None or best_in_population.Distance < self.best_in_last_population.Distance:
+            self.best_in_last_population = best_in_population
+            self.no_improvement_counter = 0
+        else:
+            self.no_improvement_counter += 1
+        # Reset parcial se não houve melhora por muitas gerações
+        if self.no_improvement_counter >= self.reset_threshold:
+            # print("Reset parcial da população por estagnação...")
+            self.partial_reset()
+            self.no_improvement_counter = 0
+
 
         # Preenche novamente se precisar completar o tamanho
         while len(new_population) < self.population_size:
