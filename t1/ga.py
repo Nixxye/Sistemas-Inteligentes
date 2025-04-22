@@ -24,11 +24,11 @@ class GA:
         self.reset_ratio = reset_ratio     # Porcentagem da população a ser resetada
 
         self.n = len(coords)
-
+        
+    def solution(self):
         self.init_population()
         for i in range(self.generations):
             self.sex()
-
     # Inicializa a população com soluções aleatórias
     def init_population(self):
         for _ in range(self.population_size):
