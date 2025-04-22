@@ -8,7 +8,7 @@ import utils
 from solution import GASolution
 
 class GA:
-    def __init__(self, coords, slice, mutation_rate, population_size, generations, elitism_rate=10, cota_rate=0.8, reset_threshold=15, reset_ratio=0.3):
+    def __init__(self, coords, slice, mutation_rate, population_size, generations, elitism_rate=10, cota_rate=0.8, reset_threshold=15, reset_ratio=0.3, hungry_rate=0.3):
         self.coords = coords
         self.slice = slice
         self.mutation_rate = mutation_rate
@@ -22,6 +22,7 @@ class GA:
         self.no_improvement_counter = 0
         self.reset_threshold = reset_threshold  # Número de gerações sem melhora antes de resetar parcialmente
         self.reset_ratio = reset_ratio     # Porcentagem da população a ser resetada
+        self.hungry_rate = hungry_rate
 
         self.n = len(coords)
         
@@ -31,17 +32,64 @@ class GA:
             self.sex()
     # Inicializa a população com soluções aleatórias
     def init_population(self):
-        for _ in range(self.population_size):
+        num_hungry = int(self.population_size * self.hungry_rate)
+
+        # Obtém a solução gulosa base
+        greedy_solution = self.hungry()
+        base_path = greedy_solution.Path[:]
+
+        # Adiciona a própria solução gulosa à população
+        self.population.append(greedy_solution)
+
+        # Gera variações da solução gulosa
+        for _ in range(num_hungry - 1):  # -1 porque já adicionamos a original
+            path = base_path[:]
+            i, j = random.sample(range(self.n), 2)
+            path[i], path[j] = path[j], path[i]  # pequena modificação
+            solution = GASolution(path, self.slice)
+            solution.Distance = utils.calculate_solution_distance(path, self.coords)
+            self.population.append(solution)
+
+        # Gera o restante da população aleatoriamente
+        while len(self.population) < self.population_size:
             path = random.sample(range(self.n), self.n)
             solution = GASolution(path, self.slice)
-            if len(solution.Path) == self.n:
-                solution.Distance = utils.calculate_solution_distance(
-                    solution.Path, self.coords
-                )
-                self.population.append(solution)
+            solution.Distance = utils.calculate_solution_distance(path, self.coords)
+            self.population.append(solution)
 
         self.best_solution = min(self.population, key=lambda x: x.Distance)
 
+    def hungry(self):
+        solution = GASolution([], self.slice)
+        solution.Path.append(0)  # Começa no nó inicial
+        column = 0
+
+        while len(solution.Path) != self.n:
+            min_edge = None
+            row = column  # Define a linha como o último nó visitado
+            next_column = None  # Variável auxiliar para armazenar o próximo nó
+
+            for index, col in enumerate(self.coords[row]):
+                if (
+                    index != row and index not in solution.Path
+                ):  # Evita loops e nós já visitados
+                    if min_edge is None or col < min_edge:  # Encontra a menor aresta
+                        min_edge = col
+                        next_column = index  # Guarda o nó correspondente à menor aresta
+
+            if next_column is not None:  # Confirma que um próximo nó foi encontrado
+                solution.Path.append(next_column)
+                column = next_column  # Atualiza o nó atual para continuar o processo
+
+        if len(solution.Path) == self.n:
+            solution.Distance = utils.calculate_solution_distance(
+                solution.Path, self.coords
+            )
+            self.population.append(solution)
+            # self.best = solution
+            return solution
+        return "ERROR: solution not found"
+    
     def partial_reset(self):
         reset_count = int(self.population_size * self.reset_ratio)
         for _ in range(reset_count):
