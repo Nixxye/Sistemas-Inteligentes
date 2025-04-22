@@ -1,60 +1,64 @@
-from anneal import SimAnneal
-import utils
-import networkx as nx
+import math
+import time
+
 import matplotlib.pyplot as plt
+import networkx as nx
+import utils
+from anneal import SimAnneal
+from ga import GA
+from solution import TSolution
+import random
 
-if __name__ == "__main__":
-    vertices = 200
-    max_weight = 400
-    coords = utils.create_graph(vertices, max_weight)
-    # # for solution in sa.solutions:
-    alpha = 0.9999
-    stopping_T = 1
-    stopping_iter = 32000
-    T = 100000
-    sa = SimAnneal(coords, stopping_iter=stopping_iter, T=T, stopping_T=stopping_T, alpha=alpha, biggest_length=max_weight)
-    #     print(f"Path: {solution.Path}, Distance: {solution.Distance}")
-    # print(f"Guloso: {sa.solutions[0].Path}, Distance: {sa.solutions[0].Distance}")
-    # print(f"{sa.best.Path}, Distance: {sa.best.Distance}")
-    N = 100
-    while sa.solutions[0].Distance <= sa.best.Distance or N > 0:
-        sa = SimAnneal(coords, stopping_iter=stopping_iter, T=T, stopping_T=stopping_T, alpha=alpha, biggest_length=max_weight)
-        alpha *= 0.9
-        print('qt de solutions: ', len(sa.solutions))
-        print("melhor -------------------------")
-        print(f"Diferença para o guloso: {(sa.best.Distance - sa.solutions[0].Distance) / sa.solutions[0].Distance * 100:.2f}%")
-        print(f"stopping T: {sa.stopping_T}")
-        print(f"Iterações: {sa.number_of_iterations}")
-        print(f"Alpha: {alpha}")
-        print(f"Distance: {sa.best.Distance}")
-        print(f"Temp: {sa.best.Temperature}")
-        print("end melhor -------------------------")
-        print("ultimo -------------------------")
-        print(f"Diferença para o guloso: {(sa.solutions[len(sa.solutions)-1].Distance - sa.solutions[0].Distance) / sa.solutions[0].Distance * 100:.2f}%")
-        print(f"stopping T: {sa.stopping_T}")
-        print(f"Iterações: {sa.number_of_iterations}")
-        print(f"Alpha: {alpha}")
-        print(f"T: {T}")
-        print(f"Distance: {sa.solutions[len(sa.solutions)-1].Distance}")
-        print(f"Temp: {sa.solutions[len(sa.solutions)-1].Temperature}")
-        print("end ultimo -------------------------")
-        N -= 1
+import time
 
-    # edges = utils.create_networkX_edges_from_solution_path(sa.solutions[0].Path, coords)
-    # G = nx.DiGraph()
-    # G.add_weighted_edges_from(edges)
-    # pos = nx.spring_layout(G, seed=42)
-    # nx.draw(
-    #     G,
-    #     pos,
-    #     with_labels=True,
-    #     node_color="lightblue",
-    #     node_size=1500,
-    #     arrows=True,
-    #     font_size=14,
-    #     connectionstyle="arc3,rad=0.2",
-    # )
+vertices = 50
+max_weight = 800
+coords = utils.create_graph(vertices, max_weight)
+for i in range(10):
+    # Tempera Simulada
+    alpha = 1e4
+    stopping_T = 10e-16
+    stopping_iter = 2e4
+    T = 10e1
+    sa = SimAnneal(
+        coords,
+        stopping_iter=stopping_iter,
+        T=T,
+        stopping_T=stopping_T,
+        alpha=alpha,
+        biggest_length=max_weight,
+    )
 
-    # edge_labels = nx.get_edge_attributes(G, "weight")
-    # nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=12)
-    # plt.show()
+    start_sa = time.time()
+    sa.anneal()
+    end_sa = time.time()
+    time_sa = end_sa - start_sa
+
+    # Algoritmo Genético
+    ga = GA(
+        coords,
+        slice=int(vertices / 3),
+        mutation_rate=0.8,
+        population_size=50,
+        generations=10000,
+        elitism_rate=60,
+        cota_rate=0.5,
+        reset_threshold=40,
+        reset_ratio=0.3,
+    )
+
+    start_ga = time.time()
+    ga.solution()
+    end_ga = time.time()
+    time_ga = end_ga - start_ga
+
+    # Resultados
+    gulosa = sa.solutions[0].Distance
+    genetica = ga.best_solution.Distance
+    tempera = sa.best.Distance
+
+    print("-------------------------------------------------")
+    print(f"Solução gulosa: {gulosa}")
+    print(f"Melhor solução AG: {genetica} (tempo: {time_ga:.4f} s)")
+    print(f"Melhor solução Tempera: {tempera} (tempo: {time_sa:.4f} s)")
+
