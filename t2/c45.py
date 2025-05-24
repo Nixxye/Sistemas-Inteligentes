@@ -71,15 +71,24 @@ class c45Node:
         
     def classify(self, data):
         if self.children == []:
-            print("Classificado como: ", self.data[0][-1])
+            #print("Classificado como: ", self.data[0][-1])
+            return self.data[0][-1]
         else:
             if data[self.attribute] < self.threshold:
                 return self.children[0].classify(data)
             else:
                 return self.children[1].classify(data)
 
+def validate(data, tree):
+    correct = 0
+    for i in range(len(data)):
+        if int(tree.classify(data[i])) == int(data[i][-1]):
+            correct += 1
+    return correct / len(data)
+
 if __name__ == "__main__":
     data = pd.read_csv("dataset/treino_sinais_vitais_com_label.csv")
-    arvre = c45Node(data.values[0: int(len(data.values) * 3 / 2)])
+    trainingPercentage = 0.2
+    arvre = c45Node(data.values[0: int(len(data.values) * trainingPercentage)])
     arvre.build_tree()
-    arvre.classify(data.values[-3])
+    print("Acurácia: ", validate(data.values[int(len(data.values) * trainingPercentage):], arvre))
