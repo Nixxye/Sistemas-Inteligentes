@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 
 inputSize = 7
 METHOD = 'sigmoid'
-LEARNING_RATE = 0.3
+LEARNING_RATE = 1
 
 class NeuralNetwork:
     def __init__(self, inputSize=inputSize, numLayers=3, numNeurons=3):
@@ -38,35 +38,36 @@ class NeuralNetwork:
             layer = []
             for j in range(self.numNeurons):
                 neuron = Perceptron(previousSize)
-                neuron.weights = [random.uniform(-0.1, 0.1) for _ in range(previousSize)]
                 layer.append(neuron)
             self.layers.append(layer)
             previousSize = self.numNeurons  # Atualiza para a próxima camada
         self.outputLayer = OutputLayer(previousSize)  # Corrige tamanho da camada de saída
 
 
-    def feedForward(self, inputs):
-        if len(inputs) != self.inputSize:
-            raise ValueError(f"Tamanho do vetor de entrada ({len(inputs)}) "
-                             f"incompatível com inputSize ({self.inputSize})")
+    def feedForward(self, inputsVector):
+        self.layersOutputs = []  # Limpa as saídas da camada antes de cada feedforward
+        inputList = list(inputsVector)
+        if len(inputsVector) != self.inputSize:
+            raise ValueError(f"NeuralNetwork: Tamanho do vetor de entrada ({len(inputsVector)}) "
+                             f"incompatível com inputSize da rede ({self.inputSize})")
+        
+        for layerIndex, hiddenLayer in enumerate(self.layers):
+            nextinputList = []
+            # print(f"\nCamada {layerIndex} — Tamanho do inputList: {len(inputList)} — Neurônios na camada: {len(hiddenLayer)}")
+            for neuronIndex, neuron in enumerate(hiddenLayer):
+                # print(f"  Neurônio {neuronIndex} da camada {layerIndex}")
+                output = neuron.activationFunction(inputList)
+                nextinputList.append(output)
+                self.layersOutputs.append(nextinputList)  # Armazena as saídas da camada
+            inputList = nextinputList
 
-        self.layersOutputs = []
-        i = 0
-        for layer in self.layers:
-            layerOutputs = []
-            for neuron in layer:
-                output = neuron.activationFunction(inputs)
-                layerOutputs.append(output)
-            self.layersOutputs.append(layerOutputs)
-            inputs = layerOutputs
-            i += 1
 
-        self.finalOutputs = self.outputLayer.getProbabilites(inputs)
-        return self.finalOutputs
+        return self.outputLayer.getPredictedClass(inputList)
 
     def train(self, inputs, target):
         # Forward pass
         outputs = self.feedForward(inputs)
+        # print(f"Saídas da rede: {outputs}")
 
         # Update output layer weights
         self.outputLayer.updateWeights(target)
@@ -83,7 +84,7 @@ class NeuralNetwork:
                 error = 0.0
                 if isinstance(nextLayer, OutputLayer):
                     for k in range(len(nextLayer.deltas)):
-                        error += nextLayer.weights[j][k] * nextLayer.deltas[k]
+                        error += nextLayer.weights[k][j] * nextLayer.deltas[k]
                 else:
                     for k, nextNeuron in enumerate(nextLayer):
                         error += nextNeuron.weights[j] * nextNeuron.delta
@@ -99,28 +100,53 @@ class NeuralNetwork:
 
 
     def predictClass(self, inputsVector):
-        inputList = list(inputsVector)
-        if len(inputsVector) != self.inputSize:
-            raise ValueError(f"NeuralNetwork: Tamanho do vetor de entrada ({len(inputsVector)}) "
-                             f"incompatível com inputSize da rede ({self.inputSize})")
-        nextinputList = []
-        for hiddenLayer in self.layers:
-            for neuron in hiddenLayer:
-                output = neuron.activationFunction(inputList)
-                nextinputList.append(output)
-            inputList = nextinputList
-            nextinputList = []
+        return self.feedForward(inputsVector)
 
-        if self.outputLayer:
-            return self.outputLayer.getPredictedClass(inputList)
-        else:
-            raise RuntimeError("A camada de saída (OutputLayer) não foi inicializada corretamente.")
+        
+    def getAllWeights(self):
+        weights_snapshot = []
+        for layer in self.layers:
+            for neuron in layer:
+                weights_snapshot.append((neuron.weights[:], neuron.bias))
+        for i in range(len(self.outputLayer.weights)):
+            weights_snapshot.append((self.outputLayer.weights[i][:], self.outputLayer.biases[i]))
+        return weights_snapshot
+
+    def printWeightDifferences(self, before, after):
+        print("\n=== Diferença entre Pesos Iniciais e Finais ===")
+        neuron_idx = 0
+        for l_idx, layer in enumerate(self.layers):
+            for n_idx in range(len(layer)):
+                w_before, b_before = before[neuron_idx]
+                w_after, b_after = after[neuron_idx]
+                print(f"Camada {l_idx}, Neurônio {n_idx}:")
+                for i, (wb, wa) in enumerate(zip(w_before, w_after)):
+                    if abs(wb - wa) > 1e-6:
+                        print(f"  Peso {i}: {wb:.6f} -> {wa:.6f} (Δ = {wa - wb:.6f})")
+                if abs(b_before - b_after) > 1e-6:
+                    print(f"  Bias: {b_before:.6f} -> {b_after:.6f} (Δ = {b_after - b_before:.6f})")
+                neuron_idx += 1
+
+        # Camada de saída
+        num_output_neurons = len(self.outputLayer.weights)
+        for c_idx in range(num_output_neurons):
+            w_before, b_before = before[neuron_idx]
+            w_after, b_after = after[neuron_idx]
+            print(f"Camada de saída, Classe {c_idx}:")
+            for i, (wb, wa) in enumerate(zip(w_before, w_after)):
+                if abs(wb - wa) > 1e-6:
+                    print(f"  Peso {i}: {wb:.6f} -> {wa:.6f} (Δ = {wa - wb:.6f})")
+            if abs(b_before - b_after) > 1e-6:
+                print(f"  Bias: {b_before:.6f} -> {b_after:.6f} (Δ = {b_after - b_before:.6f})")
+            neuron_idx += 1
+
+
 
 class OutputLayer:
     def __init__(self, inputSize, numClasses=4):
         self.inputSize = inputSize
         self.numClasses = numClasses
-        self.weights = [[random.uniform(-0.1, 0.1) for _ in range(inputSize)] for _ in range(numClasses)]
+        self.weights = [[random.uniform(-1,1) for _ in range(inputSize)] for _ in range(numClasses)]
         self.biases = [0.0] * numClasses
         self.learningRate = LEARNING_RATE
         self.lastInput = []
@@ -149,6 +175,9 @@ class OutputLayer:
 
     def computeOutputDeltas(self, targets):
         self.deltas = [self.lastOutputs[i] - targets[i] for i in range(self.numClasses)]
+        # print(f"Outputs: {self.lastOutputs}")
+        # print(f"Targets: {targets}")
+        # print(f"Deltas: {self.deltas}")
 
     def updateWeights(self, targets):
         self.computeOutputDeltas(targets)
@@ -162,11 +191,10 @@ class OutputLayer:
 
 
 
-
 class Perceptron:
     def __init__(self, inputSize, method=METHOD):
-        self.weights = [random.uniform(-0.1, 0.1) for _ in range(inputSize)]
-        self.bias = random.uniform(-0.1, 0.1)
+        self.weights = [random.uniform(-1,1) for _ in range(inputSize)]
+        self.bias = random.uniform(-1,1)
         self.learningRate = LEARNING_RATE
         self.inputSize = inputSize
         self.method = method
@@ -188,9 +216,12 @@ class Perceptron:
         if self.method == 'sigmoid':
             # Derivada da sigmoid: output * (1 - output)
             self.delta = error * self.lastOutput * (1 - self.lastOutput)
+        elif self.method == 'relu':
+            self.delta = error if self.netInput > 0 else 0
         elif self.method == 'linear':
             # Derivada da função linear é 1
-            self.delta = error            
+            self.delta = error           
+        # print(f"Delta calculado: {self.delta:.4f} (Erro: {error:.4f}, Saída: {self.lastOutput:.4f})") 
 
     def updateWeights(self, error):
         self.computeDelta(error)
@@ -207,6 +238,8 @@ class Perceptron:
         x = self.netInput
         if self.method == 'sigmoid':
             self.lastOutput = self.sigmoid(x)
+        elif self.method == 'relu':
+            self.lastOutput = self.relu(x)
         elif self.method == 'linear':
             self.lastOutput = x
         else:
@@ -218,13 +251,17 @@ class Perceptron:
             return 1 / (1 + math.exp(-x))
         except OverflowError:
             return 0.0 if x < 0 else 1.0
+        
+    def relu(self, x):
+        x = max(-500, min(500, x))  # evita overflow em exp()
+        return max(0.0, x)
 
 
 
 
 def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"):
     data = pd.read_csv(data_path).values
-    training_percentages = [0.1, 0.5, 0.9]
+    training_percentages = [0.7]
     
     resultados = []
 
@@ -243,28 +280,36 @@ def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
+        X_test = scaler.fit_transform(X_test)
         # Converte as classificações para vetores
         y_train_encoded = encoder.transform(y_train)
         y_test_int = y_test.astype(int).flatten()
 
         # Criar e treinar a rede
-        nn = NeuralNetwork(inputSize=X_train.shape[1], numLayers=3, numNeurons=2)
+        nn = NeuralNetwork(inputSize=X_train.shape[1], numLayers=3, numNeurons=1)
         nn.createLayers()
 
         # nn.printWeights("Pesos iniciais")
+        initial_weights = nn.getAllWeights()
+        y_pred = [nn.predictClass(x) for x in X_test]
+        acc = accuracy_score(y_test_int, y_pred)
+        print(f"Acurácia inicial para {int(perc * 100)}% de treino: {acc * 100:.2f}%")
+
+        nn.train(X_train[0], y_train_encoded[0])  # Treinar com o primeiro exemplo
+        nn.train(X_train[0], y_train_encoded[0])  # Treinar com o primeiro exemplo
 
         for epoch in range(100):
             for x, y in zip(X_train, y_train_encoded):
                 nn.train(x, y)
-        # nn.printWeights("Pesos finais")
+        final_weights = nn.getAllWeights()
+        # nn.printWeightDifferences(initial_weights, final_weights)
         # Testar
         y_pred = [nn.predictClass(x) for x in X_test]
         acc = accuracy_score(y_test_int, y_pred)
         resultados.append(acc)
-        print(f"Acurácia para {int(perc * 100)}% de treino: {acc * 100:.2f}%")
+        print(f"Acurácia final para {int(perc * 100)}% de treino: {acc * 100:.2f}%")
 
-    # Salvar gráfico
+    Salvar gráfico
     plt.figure()
     plt.plot(training_percentages, [x * 100 for x in resultados], marker='o', label='Rede Neural')
     plt.title("Acurácia da Rede Neural")
