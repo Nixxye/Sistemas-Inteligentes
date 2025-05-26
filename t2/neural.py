@@ -1,325 +1,225 @@
-import math
 import random
-import os
+import numpy as np
+import math
 import pandas as pd
+import os
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import StandardScaler
 
-
-inputSize = 7
-METHOD = 'sigmoid'
-LEARNING_RATE = 1
-
-class NeuralNetwork:
-    def __init__(self, inputSize=inputSize, numLayers=3, numNeurons=3):
-        self.inputSize = inputSize
-
-        self.layers = []
-        self.numLayers = numLayers
-        self.numNeurons = numNeurons
-        self.layerOutputs = []
-        self.outputLayer = OutputLayer(numNeurons)
-
-    def printWeights(self, titulo="Pesos da rede"):
-        print(f"\n=== {titulo} ===")
-        for l_idx, layer in enumerate(self.layers):
-            print(f"Camada {l_idx}:")
-            for n_idx, neuron in enumerate(layer):
-                print(f"  Neurônio {n_idx}: Pesos = {neuron.weights}, Bias = {neuron.bias}")
-        print("Camada de saída:")
-        for c_idx, weights in enumerate(self.outputLayer.weights):
-            print(f"  Classe {c_idx}: Pesos = {weights}, Bias = {self.outputLayer.biases[c_idx]}")
-
-    def createLayers(self):
-        previousSize = self.inputSize
-        for i in range(self.numLayers):
-            layer = []
-            for j in range(self.numNeurons):
-                neuron = Perceptron(previousSize)
-                layer.append(neuron)
-            self.layers.append(layer)
-            previousSize = self.numNeurons  # Atualiza para a próxima camada
-        self.outputLayer = OutputLayer(previousSize)  # Corrige tamanho da camada de saída
-
-
-    def feedForward(self, inputsVector):
-        self.layersOutputs = []  # Limpa as saídas da camada antes de cada feedforward
-        inputList = list(inputsVector)
-        if len(inputsVector) != self.inputSize:
-            raise ValueError(f"NeuralNetwork: Tamanho do vetor de entrada ({len(inputsVector)}) "
-                             f"incompatível com inputSize da rede ({self.inputSize})")
-        
-        for layerIndex, hiddenLayer in enumerate(self.layers):
-            nextinputList = []
-            # print(f"\nCamada {layerIndex} — Tamanho do inputList: {len(inputList)} — Neurônios na camada: {len(hiddenLayer)}")
-            for neuronIndex, neuron in enumerate(hiddenLayer):
-                # print(f"  Neurônio {neuronIndex} da camada {layerIndex}")
-                output = neuron.activationFunction(inputList)
-                nextinputList.append(output)
-                self.layersOutputs.append(nextinputList)  # Armazena as saídas da camada
-            inputList = nextinputList
-
-
-        return self.outputLayer.getPredictedClass(inputList)
-
-    def train(self, inputs, target):
-        # Forward pass
-        outputs = self.feedForward(inputs)
-        # print(f"Saídas da rede: {outputs}")
-
-        # Update output layer weights
-        self.outputLayer.updateWeights(target)
-
-        # Backpropagate through hidden layers
-        self.deltas = self.outputLayer.deltas
-        nextLayer = self.outputLayer
-        for i in reversed(range(len(self.layers))):
-            currentLayer = self.layers[i]
-            currentOutputs = self.layersOutputs[i]
-            currentDeltas = []
-            for j, neuron in enumerate(currentLayer):
-                # Calcular erro: soma dos deltas da próxima camada * pesos
-                error = 0.0
-                if isinstance(nextLayer, OutputLayer):
-                    for k in range(len(nextLayer.deltas)):
-                        error += nextLayer.weights[k][j] * nextLayer.deltas[k]
-                else:
-                    for k, nextNeuron in enumerate(nextLayer):
-                        error += nextNeuron.weights[j] * nextNeuron.delta
-                
-                # Atualizar pesos e guardar delta
-                neuron.updateWeights(error)
-                currentDeltas.append(neuron.delta)
-            
-            # Atualizar nextLayer e deltas para próxima iteração
-            nextLayer = currentLayer
-            self.deltas = currentDeltas
-
-
-
-    def predictClass(self, inputsVector):
-        return self.feedForward(inputsVector)
-
-        
-    def getAllWeights(self):
-        weights_snapshot = []
-        for layer in self.layers:
-            for neuron in layer:
-                weights_snapshot.append((neuron.weights[:], neuron.bias))
-        for i in range(len(self.outputLayer.weights)):
-            weights_snapshot.append((self.outputLayer.weights[i][:], self.outputLayer.biases[i]))
-        return weights_snapshot
-
-    def printWeightDifferences(self, before, after):
-        print("\n=== Diferença entre Pesos Iniciais e Finais ===")
-        neuron_idx = 0
-        for l_idx, layer in enumerate(self.layers):
-            for n_idx in range(len(layer)):
-                w_before, b_before = before[neuron_idx]
-                w_after, b_after = after[neuron_idx]
-                print(f"Camada {l_idx}, Neurônio {n_idx}:")
-                for i, (wb, wa) in enumerate(zip(w_before, w_after)):
-                    if abs(wb - wa) > 1e-6:
-                        print(f"  Peso {i}: {wb:.6f} -> {wa:.6f} (Δ = {wa - wb:.6f})")
-                if abs(b_before - b_after) > 1e-6:
-                    print(f"  Bias: {b_before:.6f} -> {b_after:.6f} (Δ = {b_after - b_before:.6f})")
-                neuron_idx += 1
-
-        # Camada de saída
-        num_output_neurons = len(self.outputLayer.weights)
-        for c_idx in range(num_output_neurons):
-            w_before, b_before = before[neuron_idx]
-            w_after, b_after = after[neuron_idx]
-            print(f"Camada de saída, Classe {c_idx}:")
-            for i, (wb, wa) in enumerate(zip(w_before, w_after)):
-                if abs(wb - wa) > 1e-6:
-                    print(f"  Peso {i}: {wb:.6f} -> {wa:.6f} (Δ = {wa - wb:.6f})")
-            if abs(b_before - b_after) > 1e-6:
-                print(f"  Bias: {b_before:.6f} -> {b_after:.6f} (Δ = {b_after - b_before:.6f})")
-            neuron_idx += 1
-
-
-
-class OutputLayer:
-    def __init__(self, inputSize, numClasses=4):
-        self.inputSize = inputSize
-        self.numClasses = numClasses
-        self.weights = [[random.uniform(-1,1) for _ in range(inputSize)] for _ in range(numClasses)]
-        self.biases = [0.0] * numClasses
-        self.learningRate = LEARNING_RATE
-        self.lastInput = []
-        self.deltas = []
-        self.lastOutputs = []
-
-    def softmax(self, z):
-        max_z = max(z)
-        exp_values = [math.exp(x - max_z) for x in z]
-        total = sum(exp_values)
-        return [val / total for val in exp_values]
-
-    def getProbabilites(self, inputs):
-        self.lastInput = inputs
-        z = []
-        for i in range(self.numClasses):
-            weighted_sum = sum(inputs[j] * self.weights[i][j] for j in range(self.inputSize)) + self.biases[i]
-            z.append(weighted_sum)
-        self.lastOutputs = self.softmax(z)
-
-        return self.lastOutputs
-
-    def getPredictedClass(self, inputs):
-        probs = self.getProbabilites(inputs)
-        return probs.index(max(probs)) + 1
-
-    def computeOutputDeltas(self, targets):
-        self.deltas = [self.lastOutputs[i] - targets[i] for i in range(self.numClasses)]
-        # print(f"Outputs: {self.lastOutputs}")
-        # print(f"Targets: {targets}")
-        # print(f"Deltas: {self.deltas}")
-
-    def updateWeights(self, targets):
-        self.computeOutputDeltas(targets)
-        for class_idx in range(self.numClasses):
-            for i in range(self.inputSize):
-                old = self.weights[class_idx][i]
-                self.weights[class_idx][i] -= self.learningRate * self.deltas[class_idx] * self.lastInput[i]
-                # if old != self.weights[class_idx][i]:
-                #     print(f"Peso [{class_idx}][{i}] alterado: {old:.4f} -> {self.weights[class_idx][i]:.4f}")
-            self.biases[class_idx] -= self.learningRate * self.deltas[class_idx]
-
-
-
-class Perceptron:
-    def __init__(self, inputSize, method=METHOD):
-        self.weights = [random.uniform(-1,1) for _ in range(inputSize)]
-        self.bias = random.uniform(-1,1)
-        self.learningRate = LEARNING_RATE
-        self.inputSize = inputSize
-        self.method = method
-        self.lastOutput = 0
-        self.lastInputs = []
-        self.delta = 0
-        self.netInput = 0
-
-    def calculateNetInput(self, inputsVector):
-        self.lastInputs = inputsVector
-        if len(inputsVector) != self.inputSize:
-            raise ValueError(f"Tamanho do vetor de entrada ({len(inputsVector)}) "
-                             f"incompatível com inputSize ({self.inputSize})")
-
-        self.netInput = sum(self.weights[i] * inputsVector[i] for i in range(self.inputSize)) + self.bias
-
-
-    def computeDelta(self, error): # VERIFICAR DERIVADAS
-        if self.method == 'sigmoid':
-            # Derivada da sigmoid: output * (1 - output)
-            self.delta = error * self.lastOutput * (1 - self.lastOutput)
-        elif self.method == 'relu':
-            self.delta = error if self.netInput > 0 else 0
-        elif self.method == 'linear':
-            # Derivada da função linear é 1
-            self.delta = error           
-        # print(f"Delta calculado: {self.delta:.4f} (Erro: {error:.4f}, Saída: {self.lastOutput:.4f})") 
-
-    def updateWeights(self, error):
-        self.computeDelta(error)
-        for i in range(self.inputSize):
-            old = self.weights[i]
-            self.weights[i] -= self.learningRate * self.delta * self.lastInputs[i]
-            # if old != self.weights[i]:
-            #     print(f"Peso {i} alterado: {old:.4f} -> {self.weights[i]:.4f}")
-        self.bias -= self.learningRate * self.delta
-
-
-    def activationFunction(self, inputsVector):
-        self.calculateNetInput(inputsVector)
-        x = self.netInput
-        if self.method == 'sigmoid':
-            self.lastOutput = self.sigmoid(x)
-        elif self.method == 'relu':
-            self.lastOutput = self.relu(x)
-        elif self.method == 'linear':
-            self.lastOutput = x
-        else:
-            raise ValueError("Método de ativação desconhecido")
-        return self.lastOutput
-
-    def sigmoid(self, x):
-        try:
-            return 1 / (1 + math.exp(-x))
-        except OverflowError:
-            return 0.0 if x < 0 else 1.0
-        
-    def relu(self, x):
-        x = max(-500, min(500, x))  # evita overflow em exp()
-        return max(0.0, x)
-
-
-
+# Defina os valores fixos que você deseja usar
+LEARNING_RATE = 0.3
+HIDDEN_LAYERS_SIZES = [1, 3, 5]
+NEURONS_PER_LAYERS = [1, 3, 5]
+TRAINING_PERCENTAGES = [0.3]
+EPOCHS = 300
 
 def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"):
     data = pd.read_csv(data_path).values
-    training_percentages = [0.7]
-    
-    resultados = []
+    training_percentages = TRAINING_PERCENTAGES
 
     os.makedirs("graficos/neural", exist_ok=True)
 
     encoder = OneHotEncoder(sparse_output=False)
     all_labels = data[:, -1].reshape(-1, 1)
-    encoder.fit(all_labels) # 2 -> [0, 1, 0, 0] (transforma as classes em vetores)
+    encoder.fit(all_labels)
+
+    resultados = []  # tuplas (label, perc, acc_before, acc_after)
 
     for perc in training_percentages:
-        treino = data[:int(len(data)*perc)]
-        teste = data[int(len(data)*perc):]
-        # Separa as entradas e as classificações
+        treino = data[:int(len(data) * perc)]
+        teste = data[int(len(data) * perc):]
+
         X_train, y_train = treino[:, :-1], treino[:, -1].reshape(-1, 1)
         X_test, y_test = teste[:, :-1], teste[:, -1].reshape(-1, 1)
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
-        X_test = scaler.fit_transform(X_test)
-        # Converte as classificações para vetores
+        X_test = scaler.transform(X_test)
+
         y_train_encoded = encoder.transform(y_train)
         y_test_int = y_test.astype(int).flatten()
 
-        # Criar e treinar a rede
-        nn = NeuralNetwork(inputSize=X_train.shape[1], numLayers=3, numNeurons=1)
-        nn.createLayers()
+        for hidden_layers in HIDDEN_LAYERS_SIZES:
+            for neurons_per_layer in NEURONS_PER_LAYERS:
+                print(f"\nTreino {int(perc*100)}% | {hidden_layers} camadas, {neurons_per_layer} neurônios")
 
-        # nn.printWeights("Pesos iniciais")
-        initial_weights = nn.getAllWeights()
-        y_pred = [nn.predictClass(x) for x in X_test]
-        acc = accuracy_score(y_test_int, y_pred)
-        print(f"Acurácia inicial para {int(perc * 100)}% de treino: {acc * 100:.2f}%")
+                nn = NeuralNetwork(
+                    inputSize=X_train.shape[1],
+                    numClasses=y_train_encoded.shape[1],
+                    hiddenLayersSize=hidden_layers,
+                    neuronsPerLayer=neurons_per_layer
+                )
 
-        nn.train(X_train[0], y_train_encoded[0])  # Treinar com o primeiro exemplo
-        nn.train(X_train[0], y_train_encoded[0])  # Treinar com o primeiro exemplo
+                y_pred_before = [nn.predictClass(x) for x in X_test]
+                acc_before = accuracy_score(y_test_int, y_pred_before)
 
-        for epoch in range(100):
-            for x, y in zip(X_train, y_train_encoded):
-                nn.train(x, y)
-        final_weights = nn.getAllWeights()
-        # nn.printWeightDifferences(initial_weights, final_weights)
-        # Testar
-        y_pred = [nn.predictClass(x) for x in X_test]
-        acc = accuracy_score(y_test_int, y_pred)
-        resultados.append(acc)
-        print(f"Acurácia final para {int(perc * 100)}% de treino: {acc * 100:.2f}%")
+                for epoch in range(EPOCHS):
+                    for x, y in zip(X_train, y_train_encoded):
+                        nn.train(x, y)
 
-    Salvar gráfico
-    plt.figure()
-    plt.plot(training_percentages, [x * 100 for x in resultados], marker='o', label='Rede Neural')
-    plt.title("Acurácia da Rede Neural")
-    plt.xlabel("Porcentagem de treino")
-    plt.ylabel("Acurácia (%)")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig("graficos/neural/rede_neural_acuracia.png")
-    plt.close()
+                y_pred_after = [nn.predictClass(x) for x in X_test]
+                acc_after = accuracy_score(y_test_int, y_pred_after)
+
+                print(f"Acurácia antes: {acc_before*100:.2f}%, depois: {acc_after*100:.2f}%")
+
+                label = f"{hidden_layers}x{neurons_per_layer}"
+                resultados.append((label, f"{int(perc*100)}%", acc_before*100, acc_after*100))
+
+    # Criar um gráfico para cada % de treino, com barras duplas para cada configuração
+    for perc in training_percentages:
+        labels = []
+        acc_before_vals = []
+        acc_after_vals = []
+        for (label, p, acc_b, acc_a) in resultados:
+            if p == f"{int(perc*100)}%":
+                labels.append(label)
+                acc_before_vals.append(acc_b)
+                acc_after_vals.append(acc_a)
+
+        x = np.arange(len(labels))
+        width = 0.35
+
+        plt.figure(figsize=(12, 6))
+        plt.bar(x - width/2, acc_before_vals, width=width, label="Antes do treino", color="gray")
+        plt.bar(x + width/2, acc_after_vals, width=width, label="Depois do treino", color="green")
+
+        plt.xticks(x, labels, rotation=45)
+        plt.xlabel("Configuração (camadas x neurônios)")
+        plt.ylabel("Acurácia (%)")
+        plt.title(f"Acurácia para {int(perc*100)}% de treino")
+        plt.ylim(0, 100)
+        plt.grid(axis="y")
+        plt.legend()
+        plt.tight_layout()
+
+        plt.savefig(f"graficos/neural/acuracia_{int(perc*100)}pct.png")
+        plt.close()
+
+
+class Perceptron:
+    def __init__(self, inputSize):
+        self.weights = np.random.uniform(-1, 1, inputSize)
+        self.bias = random.uniform(-1, 1)
+        self.learningRate = LEARNING_RATE
+        self.inputSize = inputSize
+        self.lastOutput = None
+        self.lastInputs = None
+        self.delta = None
+    
+    def predict(self, inputs):
+        self.lastInputs = np.array(inputs)
+        if len(inputs) != len(self.weights):
+            raise ValueError("Input size must match weights size.")
+        
+        weightedSum = np.dot(inputs, self.weights) + self.bias
+        self.lastOutput = 1 / (1 + math.exp(-weightedSum))  # Sigmoid activation function
+        return self.lastOutput
+    
+    def updateWeights(self, error):
+        self.delta = self.lastOutput * (1 - self.lastOutput) * error
+        for i in range(self.inputSize):
+            old = self.weights[i]
+            self.weights[i] += self.learningRate * self.delta * self.lastInputs[i]
+            # if old != self.weights[i]:
+            #     print(f"Peso {i} alterado: {old:.4f} -> {self.weights[i]:.4f}")
+        self.bias += self.learningRate * self.delta
+
+class OutputLayer:
+    def __init__ (self, inputSize, numClasses):
+        self.weights = np.random.uniform(-1, 1, (numClasses, inputSize)) # Vetor de pesos para cada classe
+        self.bias = np.random.uniform(-1, 1, numClasses)
+        self.learningRate = LEARNING_RATE
+        self.numClasses = numClasses
+        self.lastOutputs = None
+        self.lastInputs = None
+        self.deltas = []
+
+    def predict(self, inputs):
+        if len(inputs) != self.weights.shape[1]:  # <- shape[1] é inputSize
+            raise ValueError("Input size must match weights size.")
+    
+        self.lastInputs = np.array(inputs)
+        self.lastOutputs = []
+        weightedSum = 0
+
+        for i in range(len(self.weights)):
+            weightedSum = np.dot(self.weights[i], inputs) + self.bias[i]
+            output = 1 / (1 + math.exp(-weightedSum))
+            self.lastOutputs.append(output)
+
+        return self.lastOutputs.index(max(self.lastOutputs)) + 1
+
+    def updateWeights(self, target):
+        self.deltas = [self.lastOutputs[i] * (1 - self.lastOutputs[i] ) * (target[i] - self.lastOutputs[i])for i in range(self.numClasses)]
+        for i in range(self.numClasses):
+            self.weights[i] += self.learningRate * self.deltas[i] * self.lastInputs
+
+class NeuralNetwork:
+    def __init__(self, inputSize, numClasses, hiddenLayersSize=1, neuronsPerLayer=1):
+        self.inputSize = inputSize
+        self.numClasses = numClasses
+        self.outputLayer = OutputLayer(neuronsPerLayer, numClasses)
+        self.hiddenLayers = []
+        self.createLayers(hiddenLayersSize, neuronsPerLayer)
+    
+    def createLayers(self, hiddenLayersSize, neuronsPerLayer):
+        n = self.inputSize
+        for _ in range(hiddenLayersSize):
+            layer = []
+            for _ in range(neuronsPerLayer):
+                layer.append(Perceptron(n))
+            n = neuronsPerLayer
+            self.hiddenLayers.append(layer)
+
+    def feedForward(self, inputs):
+        for layer in self.hiddenLayers:
+            outputs = []
+            for neuron in layer:
+                outputs.append(neuron.predict(inputs))
+            inputs = outputs
+        return self.outputLayer.predict(inputs)
+    
+    def backpropagate(self, target):
+        # Update output layer
+        self.outputLayer.updateWeights(target)
+
+        nextDeltas = self.outputLayer.deltas
+        nextWeights = self.outputLayer.weights
+
+        for layer in reversed(self.hiddenLayers):
+            currentDeltas = []
+
+            for j, neuron in enumerate(layer):
+                error = 0
+
+                for k in range(len(nextDeltas)):
+                    error += nextDeltas[k] * nextWeights[k][j]
+
+                neuron.updateWeights(error)
+
+                currentDeltas.append(neuron.delta)
+
+            nextDeltas = currentDeltas
+            nextWeights = [neuron.weights for neuron in layer]
+
+    def train(self, inputs, target):
+        inputs = np.array(inputs)
+        target = np.array(target)
+        if len(inputs) != self.inputSize:
+            raise ValueError("Input size must match the network input size.")
+        
+        self.feedForward(inputs)
+        self.backpropagate(target)
+
+    def predictClass(self, inputs):
+        return self.feedForward(inputs)
+    
+    def getAllWeights(self):
+        weights = {"output": self.outputLayer.weights.tolist()}
+        for i, layer in enumerate(self.hiddenLayers):
+            weights[f"hidden_{i}"] = [neuron.weights.tolist() for neuron in layer]
+        return weights
 
 if __name__ == "__main__":
-    # Testar a rede neural
-    testar_neural_network()
+    testar_neural_network("dataset/treino_sinais_vitais_com_label.csv")
