@@ -4,7 +4,7 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 import os
 
-MAX_DEPTH = 1
+MAX_DEPTH = 0
 NOS_PODADOS = 0
 
 class c45Node:
@@ -28,12 +28,12 @@ class c45Node:
         return count
     
     def build_tree(self):
-        if self.lvl > MAX_DEPTH or len(self.data) == 0:
+        if self.lvl > self.maxDepth or len(self.data) == 0:
             return
         att = None
         minEntropy = None
         minEntropyThreshold = None
-        for i in range(len(self.data[0])-1):
+        for i in range(1, len(self.data[0])-2): # Ignora o ID e a classe
             self.data = sorted(self.data, key=lambda x: x[i])
             threshold = self.calcThreshold(i, method=self.method)
             if threshold is None:
@@ -136,7 +136,7 @@ def validate(data, tree):
     for i in range(len(data)):
         if int(tree.classify(data[i])) == int(data[i][-1]):
             correct += 1
-        print(f"Classificando {i+1}/{len(data)}: {data[i]} -> {tree.classify(data[i])} (esperado: {data[i][-1]})")
+        #print(f"Classificando {i+1}/{len(data)}: {data[i]} -> {tree.classify(data[i])} (esperado: {data[i][-1]})")
     return correct / len(data)
 
 def pruning(tree, confidence, z=None, pruning_data=None):
@@ -184,48 +184,59 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
     training_percentages = [0.1, 0.3, 0.5, 0.7, 0.9]
     methods = ['median', 'average', 'entropy']
     confidence = 0
-    maxDepth = 3
+    maxDepth_values = [1, 3, 6, 9, 12]  # Vários máximos de profundidade para comparar
 
-    resultados = {method: {'antes': [], 'depois': []} for method in methods}
     os.makedirs("graficos/c45", exist_ok=True)
 
+    # Estrutura: resultados[method][maxDepth]['antes' ou 'depois'][i] = acurácia na i-ésima porcentagem
+    resultados = {
+        method: {
+            maxDepth: {'antes': [], 'depois': []} for maxDepth in maxDepth_values
+        }
+        for method in methods
+    }
+
     for method in methods:
-        for perc in training_percentages:
-            treino = data[:int(len(data)*perc)]
-            teste = data[int(len(data)*perc):]
+        for maxDepth in maxDepth_values:
+            for perc in training_percentages:
+                treino = data[:int(len(data)*perc)]
+                teste = data[int(len(data)*perc):]
 
-            split_index = int(len(treino) * 0.7)
-            treino_construcao = treino[:split_index]
-            treino_validacao = treino[split_index:]
+                split_index = int(len(treino) * 0.7)
+                treino_construcao = treino[:split_index]
+                treino_validacao = treino[split_index:]
 
-            tree = c45Node(treino_construcao, maxDepth=maxDepth, method=method)
-            tree.build_tree()
+                tree = c45Node(treino_construcao, maxDepth=maxDepth, method=method)
+                tree.build_tree()
 
-            acc_antes = validate(teste, tree)
-            NOS_PODADOS = 0
-            #print(f"Número de nós antes da poda: {tree.count_nodes()}")
-            pruning(tree, confidence=confidence, pruning_data=treino_validacao)
-            acc_depois = validate(teste, tree)
-            #print(f"Número de nós depois da poda: {tree.count_nodes()}")
-            #print(f"[{method.upper()} - {int(perc*100)}% treino] Nós podados: {NOS_PODADOS}")
-            #print(f"Acurácias método {method}:")
-            #print("Antes:", acc_antes)
-            #print("Depois:", acc_depois)
+                acc_antes = validate(teste, tree)
+                NOS_PODADOS = 0
+                pruning(tree, confidence=confidence, pruning_data=treino_validacao)
+                acc_depois = validate(teste, tree)
 
-            resultados[method]['antes'].append(acc_antes)
-            resultados[method]['depois'].append(acc_depois)
+                resultados[method][maxDepth]['antes'].append(acc_antes)
+                resultados[method][maxDepth]['depois'].append(acc_depois)
 
-        plt.figure()
-        plt.plot(training_percentages, [x * 100 for x in resultados[method]['antes']], label='Antes da poda')
-        plt.plot(training_percentages, [x * 100 for x in resultados[method]['depois']], label='Depois da poda')
-        plt.title(f"Método: {method}")
+        # Agora plota um gráfico por método com linhas para cada maxDepth
+        plt.figure(figsize=(10, 6))
+
+        for maxDepth in maxDepth_values:
+            plt.plot(training_percentages, 
+                     [x * 100 for x in resultados[method][maxDepth]['antes']], 
+                     label=f'Antes poda - Prof. {maxDepth}', linestyle='--')
+            plt.plot(training_percentages, 
+                     [x * 100 for x in resultados[method][maxDepth]['depois']], 
+                     label=f'Depois poda - Prof. {maxDepth}', linestyle='-')
+
+        plt.title(f"Acurácia x Porcentagem de Treino ({method})")
         plt.xlabel("Porcentagem de treino")
         plt.ylabel("Acurácia (%)")
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f"graficos/c45/{method}_acuracia.png")
+        plt.savefig(f"graficos/c45/{method}_acuracia_comparativa.png")
         plt.close()
+
 
 if __name__ == "__main__":
     testar_variacoes()
