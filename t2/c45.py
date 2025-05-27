@@ -32,7 +32,7 @@ class c45Node:
         minEntropyThreshold = None
         if len(self.data) == 0:
             return
-        for i in range(len(self.data[0])):
+        for i in range(len(self.data[0])- 1): # -1 para ignorar a classe
             # Ordena os dados para o atributo
             self.data = sorted(self.data, key=lambda x: x[i])
             # Calcula a entropia para cada atributo
@@ -133,7 +133,8 @@ class c45Node:
         left_data = [row for row in self.data if row[attribute] < threshold]
         # Filtra dados com atributo >= threshold
         right_data = [row for row in self.data if row[attribute] >= threshold]
-
+        if len(left_data) == 0 or len(right_data) == 0:
+            return
         self.children = [
             c45Node(data=left_data, lvl=self.lvl+1, maxDepth=self.maxDepth, entropy=entropy1, method=self.method),
             c45Node(data=right_data, lvl=self.lvl+1, maxDepth=self.maxDepth, entropy=entropy2, method=self.method)
