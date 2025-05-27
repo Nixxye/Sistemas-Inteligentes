@@ -4,7 +4,8 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 import os
 
-MAX_DEPTH = 5
+MAX_DEPTH = 1
+NOS_PODADOS = 0
 
 class c45Node:
     def __init__(self, data, lvl=0, maxDepth=MAX_DEPTH, entropy=None, method='entropy'):
@@ -19,41 +20,36 @@ class c45Node:
         else:
             self.entropy = entropy
         self.method = method
-        # self.testData = data[0:len(data) / 2]
-        # self.buildData = data[len(data) / 2 : len(data) ]
 
-    def build_tree(self):   
-        # Adiciona critério de parada aqui... 
-        # 
-        if self.lvl > MAX_DEPTH:
-            return    
+    def count_nodes(self):
+        count = 1  # Conta o nó atual
+        for child in self.children:
+            count += child.count_nodes()
+        return count
+    
+    def build_tree(self):
+        if self.lvl > MAX_DEPTH or len(self.data) == 0:
+            return
         att = None
         minEntropy = None
         minEntropyThreshold = None
-        if len(self.data) == 0:
-            return
-        for i in range(len(self.data[0])- 1): # -1 para ignorar a classe
-            # Ordena os dados para o atributo
+        for i in range(len(self.data[0])-1):
             self.data = sorted(self.data, key=lambda x: x[i])
-            # Calcula a entropia para cada atributo
             threshold = self.calcThreshold(i, method=self.method)
             if threshold is None:
-                # Se não houver threshold, ignora
                 continue
             entropy1 = self.calcEntropy([row for row in self.data if row[i] < threshold])
             entropy2 = self.calcEntropy([row for row in self.data if row[i] >= threshold])
             entropy = entropy1 + entropy2
-            # Se a entropia for a menor até agora, atualiza
             if minEntropy is None or entropy < minEntropy:
                 minEntropy = entropy
                 minEntropyThreshold = threshold
                 att = i
-        # Se não houver atributo, retorna
         if att is None:
             return
         self.attribute = att
+        #print(f"Dividindo no atributo {att} com threshold {minEntropyThreshold} (entropia: {minEntropy})")
         self.threshold = minEntropyThreshold
-        # Separa o conjunto de dados em 2
         self.separateData(att, minEntropyThreshold, entropy1, entropy2)
         for child in self.children:
             child.build_tree()
@@ -68,51 +64,34 @@ class c45Node:
         else:
             raise ValueError("Método de cálculo de threshold desconhecido: {}".format(method))
 
-    # Mediana  
     def calcMedThreshold(self, attribute):
-        # Extrai os valores do atributo (já estão ordenados)
         values = [row[attribute] for row in self.data]
         n = len(values)
-        # Calcula a mediana
         if n % 2 == 1:
             return values[n // 2]
         else:
             return (values[n // 2 - 1] + values[n // 2]) / 2
-        
-    # Média
+
     def calcAvgThreshold(self, attribute):
-        # Extrai os valores do atributo (já estão ordenados, mas não importa para a média)
         values = [row[attribute] for row in self.data]
-        # Retorna a média
         return sum(values) / len(values) if values else 0
 
-    # Pela entropia mínima
     def calcEntThreshold(self, attribute):
         best_threshold = None
         best_entropy = float('inf')
-
         for i in range(len(self.data) - 1):
             class_curr = self.data[i][-1]
             class_next = self.data[i + 1][-1]
-
-            # Só considera pares com classes diferentes
             if class_curr != class_next:
                 threshold = (self.data[i][attribute] + self.data[i + 1][attribute]) / 2
-
-                # Separa os dados pelo threshold
                 left = [x for x in self.data if x[attribute] < threshold]
                 right = [x for x in self.data if x[attribute] >= threshold]
-
-                # Calcula entropia ponderada
                 total = len(self.data)
                 entropy = (len(left) / total) * self.calcEntropy(left) + (len(right) / total) * self.calcEntropy(right)
-
-                # Atualiza o melhor threshold
                 if entropy < best_entropy:
                     best_entropy = entropy
                     best_threshold = threshold
-
-        return best_threshold        
+        return best_threshold
 
     def calcEntropy(self, data=None):
         if data is None:
@@ -127,11 +106,10 @@ class c45Node:
                 ent -= f * math.log2(f)
         return ent
 
-
     def separateData(self, attribute, threshold, entropy1, entropy2):
-        # Filtra dados com atributo < threshold
+        if self.lvl > self.maxDepth:
+            return
         left_data = [row for row in self.data if row[attribute] < threshold]
-        # Filtra dados com atributo >= threshold
         right_data = [row for row in self.data if row[attribute] >= threshold]
         if len(left_data) == 0 or len(right_data) == 0:
             return
@@ -140,15 +118,12 @@ class c45Node:
             c45Node(data=right_data, lvl=self.lvl+1, maxDepth=self.maxDepth, entropy=entropy2, method=self.method)
         ]
 
-        
     def classify(self, data):
         if self.children == []:
-            # Contar frequência das classes
             class_counts = {}
             for item in self.data:
                 label = item[-1]
                 class_counts[label] = class_counts.get(label, 0) + 1
-            # Retornar a classe mais frequente
             return max(class_counts.items(), key=lambda x: x[1])[0]
         else:
             if data[self.attribute] < self.threshold:
@@ -161,20 +136,39 @@ def validate(data, tree):
     for i in range(len(data)):
         if int(tree.classify(data[i])) == int(data[i][-1]):
             correct += 1
+        print(f"Classificando {i+1}/{len(data)}: {data[i]} -> {tree.classify(data[i])} (esperado: {data[i][-1]})")
     return correct / len(data)
 
-def pruning(tree, confidence, expectedError, z=None):
+def pruning(tree, confidence, z=None, pruning_data=None):
+    global NOS_PODADOS
     if z is None:
         z = norm.ppf((1 + confidence) / 2)
-    averageError = 0
+    if pruning_data is None:
+        pruning_data = tree.data
+
     for child in tree.children:
-        if len(child.children) > 0:
-            averageError += pruning(child, confidence, expectedError, z) / len(tree.children)
-    # Poda
-    if averageError > expectedError:
-        tree.children.clear()
-    
-    return calcErrorRate(tree, tree.data, z)
+        pruning(child, confidence, z, pruning_data)
+
+    if tree.children:
+        error_subtree = calcErrorRate(tree, pruning_data, z)
+        majority_class = get_majority_class(tree.data)
+        error_as_leaf = calcLeafErrorRate(tree, pruning_data, majority_class, z)
+
+        if error_as_leaf <= error_subtree:
+            tree.children.clear()
+            tree.attribute = None
+            tree.threshold = None
+            NOS_PODADOS += 1
+
+def get_majority_class(data):
+    from collections import Counter
+    labels = [row[-1] for row in data]
+    return Counter(labels).most_common(1)[0][0]
+
+def calcLeafErrorRate(tree, data, majority_class, z):
+    errors = sum(1 for row in data if row[-1] != majority_class)
+    f = errors / len(data)
+    return f + z * math.sqrt((f * (1 - f)) / len(data))
 
 def calcErrorRate(tree, data, z):
     f = 0
@@ -182,19 +176,17 @@ def calcErrorRate(tree, data, z):
         if int(tree.classify(data[i])) != int(data[i][-1]):
             f += 1
     f = f / len(data)
-    # Taxa de erro (upper bound)
     return f + z * math.sqrt((f * (1 - f)) / len(data))
 
 def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
+    global NOS_PODADOS
     data = pd.read_csv(data_path).values
     training_percentages = [0.1, 0.3, 0.5, 0.7, 0.9]
     methods = ['median', 'average', 'entropy']
-    confidence = 0.2
-    expectedError = 0.1
+    confidence = 0
     maxDepth = 3
 
     resultados = {method: {'antes': [], 'depois': []} for method in methods}
-
     os.makedirs("graficos/c45", exist_ok=True)
 
     for method in methods:
@@ -202,17 +194,27 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
             treino = data[:int(len(data)*perc)]
             teste = data[int(len(data)*perc):]
 
-            tree = c45Node(treino, maxDepth=maxDepth, method=method)
-            tree.build_tree()
-            acc_antes = validate(teste, tree)
+            split_index = int(len(treino) * 0.7)
+            treino_construcao = treino[:split_index]
+            treino_validacao = treino[split_index:]
 
-            pruning(tree, confidence, expectedError)
+            tree = c45Node(treino_construcao, maxDepth=maxDepth, method=method)
+            tree.build_tree()
+
+            acc_antes = validate(teste, tree)
+            NOS_PODADOS = 0
+            #print(f"Número de nós antes da poda: {tree.count_nodes()}")
+            pruning(tree, confidence=confidence, pruning_data=treino_validacao)
             acc_depois = validate(teste, tree)
+            #print(f"Número de nós depois da poda: {tree.count_nodes()}")
+            #print(f"[{method.upper()} - {int(perc*100)}% treino] Nós podados: {NOS_PODADOS}")
+            #print(f"Acurácias método {method}:")
+            #print("Antes:", acc_antes)
+            #print("Depois:", acc_depois)
 
             resultados[method]['antes'].append(acc_antes)
             resultados[method]['depois'].append(acc_depois)
 
-        # Salvar gráfico
         plt.figure()
         plt.plot(training_percentages, [x * 100 for x in resultados[method]['antes']], label='Antes da poda')
         plt.plot(training_percentages, [x * 100 for x in resultados[method]['depois']], label='Depois da poda')
@@ -224,7 +226,6 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
         plt.tight_layout()
         plt.savefig(f"graficos/c45/{method}_acuracia.png")
         plt.close()
-
 
 if __name__ == "__main__":
     testar_variacoes()
