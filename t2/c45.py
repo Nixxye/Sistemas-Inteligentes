@@ -38,8 +38,12 @@ class c45Node:
             threshold = self.calcThreshold(i, method=self.method)
             if threshold is None:
                 continue
-            entropy1 = self.calcEntropy([row for row in self.data if row[i] < threshold])
-            entropy2 = self.calcEntropy([row for row in self.data if row[i] >= threshold])
+            left = [row for row in self.data if row[i] < threshold]
+            right = [row for row in self.data if row[i] >= threshold]
+            total = len(self.data)
+
+            entropy1 = self.calcEntropy(left) * len(left) / total
+            entropy2 = self.calcEntropy(right) * len(right) / total
             entropy = entropy1 + entropy2
             if minEntropy is None or entropy < minEntropy:
                 minEntropy = entropy
@@ -183,8 +187,8 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
     data = pd.read_csv(data_path).values
     training_percentages = [0.1, 0.3, 0.5, 0.7, 0.9]
     methods = ['median', 'average', 'entropy']
-    confidence = 0
-    maxDepth_values = [1, 3, 6, 9, 12]  # Vários máximos de profundidade para comparar
+    confidence = 0.3
+    maxDepth_values = [1, 3, 6, 9]  # Vários máximos de profundidade para comparar
 
     os.makedirs("graficos/c45", exist_ok=True)
 
@@ -203,15 +207,15 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
                 teste = data[int(len(data)*perc):]
 
                 split_index = int(len(treino) * 0.7)
-                treino_construcao = treino[:split_index]
-                treino_validacao = treino[split_index:]
+                # treino_construcao = treino[:split_index]
+                # treino_validacao = treino[split_index:]
 
-                tree = c45Node(treino_construcao, maxDepth=maxDepth, method=method)
+                tree = c45Node(treino, maxDepth=maxDepth, method=method)
                 tree.build_tree()
 
                 acc_antes = validate(teste, tree)
                 NOS_PODADOS = 0
-                pruning(tree, confidence=confidence, pruning_data=treino_validacao)
+                pruning(tree, confidence=confidence, pruning_data=treino)
                 acc_depois = validate(teste, tree)
 
                 resultados[method][maxDepth]['antes'].append(acc_antes)
