@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score
 LEARNING_RATES = [0.003] # Mais de um valor para o eixo Z do gráfico 3D
 TRAINING_PERCENTAGES = [0.5]
 EPOCHS = 3000 # Reduzido para fins de demonstração rápida. Pode aumentar conforme necessário.
-METHODS = ['tanh']
+METHODS = ['sigmoid']
 NEURON_LIST = [5, 6]
 
 def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"):
@@ -66,6 +66,21 @@ def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"
                 y_pred_after = [nn.predictClass(x) for x in X_test]
                 acc_after = accuracy_score(y_test_int, y_pred_after)
                 print(f"Acurácia após treino: {acc_after*100:.2f}%")
+
+                from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+                cm = confusion_matrix(y_test_int, y_pred_after)
+
+                # Salvar matriz de confusão em arquivo PNG
+                disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+                disp.plot(cmap=plt.cm.Blues)
+                plt.title(f"Matriz de Confusão - Método: {method}, LR: {learning_rate}")
+
+                # Caminho para salvar o arquivo (crie a pasta se necessário)
+                filename_cm = f"graficos/neural/ConfusionMatrix_{method}_LR{learning_rate}.png"
+                plt.savefig(filename_cm)
+                plt.close()  # Fecha a figura para não mostrar na tela nem consumir memória
+
 
                 plot_data.append({
                     'neurons': sum(NEURON_LIST),
@@ -239,7 +254,7 @@ class NeuralNetwork:
         self.outputLayer = OutputLayer(neuronsList[-1], numClasses, self.learningRate)
         self.hiddenLayers = []
         self.method = method
-        self.createLayers(neuronsList, ['sigmoid', 'relu', 'tanh'], [0, 0, 1]) 
+        self.createLayers(neuronsList, ['sigmoid', 'relu', 'tanh'], [1, 0, 0]) 
     
     def createLayers(self, neuronsPerLayerList, methods, frequencies):
         current_input_size = self.inputSize
@@ -310,21 +325,36 @@ class NeuralNetwork:
     def predictClass(self, inputs):
         return self.feedForward(inputs)
 
+def plot_evolucao_metodos(resultados, training_percentages, maxDepth_values):
+    methods = ['mediana', 'média', 'ganho de informação']
+    max_depth = max(maxDepth_values)
+    
+    plt.figure(figsize=(12, 7))
+
+    for method in methods:
+        acc_antes = [x * 100 for x in resultados[method][max_depth]['antes']]
+        acc_depois = [x * 100 for x in resultados[method][max_depth]['depois']]
+
+        plt.plot(training_percentages, acc_antes, marker='o', linestyle='--', label=f'{method} antes poda')
+        plt.plot(training_percentages, acc_depois, marker='o', linestyle='-', label=f'{method} depois poda')
+
+    plt.title(f'Acurácia vs Porcentagem de Treino - Profundidade {max_depth}')
+    plt.xlabel('Porcentagem de treino')
+    plt.ylabel('Acurácia (%)')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f'graficos/c45/comparativo_metodos_profundidade_{max_depth}.png')
+    plt.close()
 
 
 
 if __name__ == "__main__":
-    # Certifique-se que o arquivo CSV está no caminho correto ou ajuste o path.
-    # Exemplo: testar_neural_network("dataset/treino_sinais_vitais_com_label.csv")
-    # Se o arquivo não existir, esta chamada irá falhar.
-    # Crie um arquivo dummy CSV se necessário para testar a estrutura do código.
-    # Exemplo de criação de dummy dataset para teste:
-    # if not os.path.exists("dataset/treino_sinais_vitais_com_label.csv"):
-    #     print("Arquivo de dataset não encontrado. Criando um dummy para teste.")
-    #     os.makedirs("dataset", exist_ok=True)
-    #     dummy_data = np.random.rand(100, 5) # 4 features, 1 label
-    #     dummy_data[:, -1] = np.random.randint(1, 5, 100) # Labels 1, 2, 3, 4
-    #     dummy_df = pd.DataFrame(dummy_data, columns=['f1', 'f2', 'f3', 'f4', 'label'])
-    #     dummy_df.to_csv("dataset/treino_sinais_vitais_com_label.csv", index=False)
-        
-    testar_neural_network("dataset/treino_sinais_vitais_com_label.csv")
+    # Executa os testes para obter resultados, porcentagens e profundidades
+    # resultados, training_percentages, maxDepth_values, data = testar_variacoes()
+    testar_neural_network()
+    # Plota o gráfico comparando a evolução da acurácia nos métodos para a maior profundidade
+    # plot_evolucao_metodos(resultados, training_percentages, maxDepth_values)
+
+    # Gera as matrizes de confusão para os métodos na maior profundidade
+    # gerar_matrizes_confusao(data_path="dataset/treino_sinais_vitais_com_label.csv")

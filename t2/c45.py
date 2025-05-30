@@ -305,7 +305,7 @@ def plot_confianca_vs_acuracia(data, maxDepth, method, training_percent=0.5):
     plt.savefig(f'graficos/c45/acuracia_confianca_metodo_{method}_profundidade_{maxDepth}.png')
     plt.close()
 
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 def salvar_matriz_confusao_csv(matrix, classes, arquivo):
     df_cm = pd.DataFrame(matrix, index=classes, columns=classes)
@@ -340,7 +340,14 @@ def gerar_matrizes_confusao(data_path="dataset/treino_sinais_vitais_com_label.cs
         cm = confusion_matrix(y_true, preds, labels=classes)
         
         arquivo = f"matrizes_confusao/matriz_confusao_{method}_prof{maxDepth}_antes_poda.csv"
-        salvar_matriz_confusao_csv(cm, classes, arquivo)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+        disp.plot(cmap=plt.cm.Blues)
+        plt.title(f"Matriz de Confusão - Método: {method}, Profundidade: {maxDepth}")
+
+        # Caminho para salvar o arquivo (crie a pasta se necessário)
+        filename_cm = f"graficos/c45/ConfusionMatrix_{method}_Profundidade{maxDepth}.png"
+        plt.savefig(filename_cm)
+        plt.close()  # Fecha a figura para não mostrar na tela nem consumir memória
 
 if __name__ == "__main__":
     # resultados, training_percentages, maxDepth_values, data = testar_variacoes()
@@ -349,5 +356,5 @@ if __name__ == "__main__":
     # Ajuste aqui para o método e profundidade do melhor resultado que você encontrar:
     melhor_metodo = 'ganho de informação'
     melhor_profundidade = 21
-    plot_confianca_vs_acuracia(data, 5, melhor_metodo, training_percent=0.5)
-    # gerar_matrizes_confusao(data_path="dataset/treino_sinais_vitais_com_label.csv")
+    # plot_confianca_vs_acuracia(data, 5, melhor_metodo, training_percent=0.5)
+    gerar_matrizes_confusao(data_path="dataset/treino_sinais_vitais_com_label.csv")
