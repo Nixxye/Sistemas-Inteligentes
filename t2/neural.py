@@ -6,15 +6,15 @@ import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D # Importação necessária para plots 3D
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import accuracy_score
 
 # Valores de exemplo para gerar um gráfico 3D mais informativo
-LEARNING_RATES = [0.1]
-HIDDEN_LAYERS_SIZES = [1, 2, 3]  # Mais de um valor para o eixo Y do gráfico 3D
-NEURONS_PER_LAYERS = [1, 3, 5] # Mais de um valor para o eixo X do gráfico 3D
+LEARNING_RATES = [0.003] # Mais de um valor para o eixo Z do gráfico 3D
 TRAINING_PERCENTAGES = [0.5]
-EPOCHS = 100 # Reduzido para fins de demonstração rápida. Pode aumentar conforme necessário.
-METHODS = ['sigmoid']
+EPOCHS = 3000 # Reduzido para fins de demonstração rápida. Pode aumentar conforme necessário.
+METHODS = ['tanh']
+NEURON_LIST = [5, 6]
 
 def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"):
     data = pd.read_csv(data_path).values
@@ -29,8 +29,8 @@ def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"
         treino = data[:int(len(data) * perc)]
         teste = data[int(len(data) * perc):]
 
-        X_train, y_train_labels = treino[:, :-1], treino[:, -1].reshape(-1, 1)
-        X_test, y_test_labels = teste[:, :-1], teste[:, -1].reshape(-1, 1)
+        X_train, y_train_labels = treino[:, 1:-2], treino[:, -1].reshape(-1, 1)
+        X_test, y_test_labels = teste[:, 1:-2], teste[:, -1].reshape(-1, 1)
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
@@ -40,37 +40,54 @@ def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"
         y_test_int = y_test_labels.astype(float).astype(int).flatten()
 
         for method in METHODS:
-            for hidden_layers_config in HIDDEN_LAYERS_SIZES: # Renomeado para clareza
-                for neurons_per_layer_config in NEURONS_PER_LAYERS: # Renomeado para clareza
-                    for learning_rate in LEARNING_RATES:
-                        print(f"\nMétodo: {method} | Treino {int(perc*100)}% | {hidden_layers_config} camadas, {neurons_per_layer_config} neurônios, LR={learning_rate}")
 
-                        nn = NeuralNetwork(
-                            inputSize=X_train.shape[1],
-                            numClasses=y_train_encoded.shape[1],
-                            hiddenLayersSize=hidden_layers_config,
-                            neuronsPerLayer=neurons_per_layer_config,
-                            learningRate=learning_rate,
-                            method=method
-                        )
+            for learning_rate in LEARNING_RATES:
+                print(f"\nMétodo: {method} | Treino {int(perc*100)}% | {len(NEURON_LIST)} camadas, {sum(NEURON_LIST)} neurônios, LR={learning_rate}")
 
-                        for epoch in range(EPOCHS):
-                            for x, y_enc in zip(X_train, y_train_encoded):
-                                nn.train(x, y_enc)
+                nn = NeuralNetwork(
+                    inputSize=X_train.shape[1],
+                    numClasses=y_train_encoded.shape[1],
+                    neuronsList=NEURON_LIST,
+                    learningRate=learning_rate,
+                    method=method
+                )
 
-                        y_pred_after = [nn.predictClass(x) for x in X_test]
-                        acc_after = accuracy_score(y_test_int, y_pred_after)
+                accuracies = []
+                lastAcc = 0
+                for epoch in range(EPOCHS):
+                    for x, y_enc in zip(X_train, y_train_encoded):
+                        nn.train(x, y_enc)
 
-                        print(f"Acurácia após treino: {acc_after*100:.2f}%")
+                    y_pred_epoch = [nn.predictClass(x) for x in X_test]
+                    acc_epoch = accuracy_score(y_test_int, y_pred_epoch)
+                    # print(f"Época {epoch + 1}/{EPOCHS} - Acurácia: {acc_epoch * 100:.2f}%")
+                    accuracies.append(acc_epoch * 100)
 
-                        plot_data.append({
-                            'neurons': neurons_per_layer_config,
-                            'layers': hidden_layers_config,
-                            'accuracy': acc_after * 100,
-                            'method': method,
-                            'lr': learning_rate,
-                            'perc_treino': perc
-                        })
+                y_pred_after = [nn.predictClass(x) for x in X_test]
+                acc_after = accuracy_score(y_test_int, y_pred_after)
+                print(f"Acurácia após treino: {acc_after*100:.2f}%")
+
+                plot_data.append({
+                    'neurons': sum(NEURON_LIST),
+                    'layers': len(NEURON_LIST),
+                    'accuracy': acc_after * 100,
+                    'method': method,
+                    'lr': learning_rate,
+                    'perc_treino': perc
+                })
+
+                # Gerar gráfico de acurácia por época
+                plt.figure(figsize=(10, 5))
+                plt.plot(range(1, EPOCHS + 1), accuracies, marker='o', linestyle='-')
+                plt.title(f'Acurácia por Época - {method} | {len(NEURON_LIST)} camadas, {sum(NEURON_LIST)} neurônios, LR={learning_rate}')
+                plt.xlabel('Época')
+                plt.ylabel('Acurácia (%)')
+                plt.grid(True, linestyle='--', alpha=0.6)
+                plt.tight_layout()
+                filename = f"graficos/neural/Acc_Epocas_{method}_C{len(NEURON_LIST)}_N{sum(NEURON_LIST)}_LR{learning_rate}.png"
+                plt.savefig(filename)
+                print(f"Gráfico de acurácia por época salvo em: {filename}")
+                plt.close()
 
     df_plot = pd.DataFrame(plot_data)
 
@@ -126,7 +143,8 @@ def testar_neural_network(data_path="dataset/treino_sinais_vitais_com_label.csv"
 
 class Perceptron:
     def __init__(self, inputSize, learningRate, method='sigmoid'):
-        self.weights = np.random.uniform(-1, 1, inputSize)
+        #self.weights = np.random.uniform(-1, 1, inputSize)
+        self.weights = np.random.randn(inputSize) * np.sqrt(2. / inputSize)
         self.bias = random.uniform(-1, 1)
         self.learningRate = learningRate
         self.inputSize = inputSize
@@ -165,7 +183,7 @@ class Perceptron:
             # A derivada do ReLU é 1 para x > 0, e 0 caso contrário.
             # (self.lastOutput > 0) resulta em True (1) ou False (0).
             # .astype(float) converte para 1.0 ou 0.0.
-            return (self.lastOutput > 0).astype(float) * error
+            return float(self.lastOutput > 0) * error
         elif self.method == 'tanh':
             # Derivada da tanh(x) é 1 - tanh(x)^2.
             # self.lastOutput já é tanh(weightedSum).
@@ -174,69 +192,67 @@ class Perceptron:
             raise ValueError("Método de ativação desconhecido para cálculo do delta. Use 'sigmoid', 'relu' ou 'tanh'.")
 
     def updateWeights(self, error):
-        # CORREÇÃO: Usar calculateDelta para obter o delta correto conforme o método de ativação
         self.delta = self.calculateDelta(error)
+        # print(f"Erro recebido: {error}")  # Debug: Verificar o erro recebido
+        # print(f"Delta calculado: {self.delta}")  # Debug: Verificar o delta calculado
+        # print(f"Última saída: {self.lastOutput}")  # Debug: Verificar a última saída
         for i in range(self.inputSize):
             self.weights[i] += self.learningRate * self.delta * self.lastInputs[i]
         self.bias += self.learningRate * self.delta
 
 class OutputLayer:
-    def __init__ (self, inputSize, numClasses, learningRate):
-        self.weights = np.random.uniform(-1, 1, (numClasses, inputSize)) # Vetor de pesos para cada classe
-        self.bias = np.random.uniform(-1, 1, numClasses)
+    def __init__(self, inputSize, numClasses, learningRate):
+        self.weights = np.random.uniform(-1, 1, (numClasses, inputSize))  # shape: (numClasses, inputSize)
+        self.bias = np.random.uniform(-1, 1, numClasses)  # shape: (numClasses,)
         self.learningRate = learningRate
         self.numClasses = numClasses
         self.lastOutputs = None
         self.lastInputs = None
         self.deltas = []
 
+    def softmax(self, z):
+        z = np.array(z)
+        z = z - np.max(z)  # prevenção de overflow
+        exp_scores = np.exp(z)
+        return exp_scores / np.sum(exp_scores)
+
     def predict(self, inputs):
-        if len(inputs) != self.weights.shape[1]:
-            raise ValueError("Input size must match weights size.")
-    
         self.lastInputs = np.array(inputs)
-        self.lastOutputs = []
-        
-        for i in range(len(self.weights)):
-            weightedSum = np.dot(self.weights[i], inputs) + self.bias[i]
-            # Prevenção de overflow para a sigmoide da camada de saída
-            weightedSum = np.clip(weightedSum, -500, 500)
-            output = 1 / (1 + math.exp(-weightedSum))
-            self.lastOutputs.append(output)
-        
-        if not self.lastOutputs: # Caso de emergência, se lastOutputs estiver vazio
-             return 1 # ou alguma classe padrão
-        return self.lastOutputs.index(max(self.lastOutputs)) + 1
+        logits = np.dot(self.weights, self.lastInputs) + self.bias  # shape: (numClasses,)
+        self.lastOutputs = self.softmax(logits)  # Probabilidades
+        return np.argmax(self.lastOutputs) + 1  # Classes 1-indexadas  
 
     def updateWeights(self, target):
-        self.deltas = [self.lastOutputs[i] * (1 - self.lastOutputs[i] ) * (target[i] - self.lastOutputs[i])for i in range(self.numClasses)]
+        # Assumindo que `target` é um vetor one-hot
+        self.deltas = [target[i] - self.lastOutputs[i] for i in range(self.numClasses)]
         for i in range(self.numClasses):
             self.weights[i] += self.learningRate * self.deltas[i] * self.lastInputs
-        # Atualização do bias da camada de saída (estava faltando)
-        for i in range(self.numClasses):
             self.bias[i] += self.learningRate * self.deltas[i]
 
-
 class NeuralNetwork:
-    def __init__(self, inputSize, numClasses, hiddenLayersSize=1, neuronsPerLayer=1, learningRate=0.01, method='sigmoid'):
+    def __init__(self, inputSize, numClasses, neuronsList, learningRate=0.01, method='sigmoid'):
         self.inputSize = inputSize
         self.numClasses = numClasses
         self.learningRate = learningRate
         # A camada de saída agora recebe 'neuronsPerLayer' como seu inputSize,
         # que é o número de saídas da última camada oculta.
-        self.outputLayer = OutputLayer(neuronsPerLayer, numClasses, self.learningRate)
+        self.outputLayer = OutputLayer(neuronsList[-1], numClasses, self.learningRate)
         self.hiddenLayers = []
         self.method = method
-        self.createLayers(hiddenLayersSize, neuronsPerLayer)
+        self.createLayers(neuronsList, ['sigmoid', 'relu', 'tanh'], [0, 0, 1]) 
     
-    def createLayers(self, hiddenLayersSize, neuronsPerLayer):
+    def createLayers(self, neuronsPerLayerList, methods, frequencies):
         current_input_size = self.inputSize
-        for i in range(hiddenLayersSize):
+        chosen_methods = []
+        for num_neurons in neuronsPerLayerList:
             layer = []
-            for _ in range(neuronsPerLayer):
-                layer.append(Perceptron(current_input_size, self.learningRate, self.method))
+            for _ in range(num_neurons):
+                chosen_method = random.choices(methods, weights=frequencies, k=1)[0]
+                chosen_methods.append(chosen_method)
+                layer.append(Perceptron(current_input_size, self.learningRate, chosen_method))
             self.hiddenLayers.append(layer)
-            current_input_size = neuronsPerLayer # A entrada da próxima camada é a saída da atual
+            current_input_size = num_neurons
+        print(f"Camadas ocultas criadas com métodos: {chosen_methods}")
 
     def feedForward(self, inputs):
         current_inputs = np.array(inputs)
@@ -268,6 +284,7 @@ class NeuralNetwork:
                 # nextWeights[k][j] é o peso que conecta o neurônio j desta camada ao neurônio k da próxima camada.
                 for k in range(len(nextDeltas)): # k itera sobre os neurônios da PRÓXIMA camada
                     error_sum += nextDeltas[k] * nextWeights[k][j]
+                # print(f"Erro calculado para o neurônio {j} da camada {i}: {error_sum}")  # Debug: Verificar o erro calculado
                 
                 # O neurônio calcula seu próprio delta e atualiza seus pesos
                 # A função updateWeights do Perceptron já calcula o delta interno usando calculateDelta(error_sum)
