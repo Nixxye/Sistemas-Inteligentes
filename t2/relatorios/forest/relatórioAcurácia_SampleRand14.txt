@@ -1,0 +1,4 @@
+Média de Acurácia: 80.47%
+Mediana de Acurácia: 80.38%
+Maior Acurácia: 82.88%
+Desvio Padrão: 1.53%
