@@ -4,12 +4,13 @@ import pandas as pd
 from scipy.stats import norm
 import matplotlib.pyplot as plt
 import os
+import numpy as np
 
 MAX_DEPTH = 0
 NOS_PODADOS = 0
 
 class c45Node:
-    def __init__(self, data, lvl=0, maxDepth=MAX_DEPTH, entropy=None, method='entropy'):
+    def __init__(self, data, lvl=0, maxDepth=MAX_DEPTH, entropy=None, method='ganho de informação'):
         self.maxDepth = maxDepth
         self.lvl = lvl
         self.children = []
@@ -24,7 +25,7 @@ class c45Node:
         self.method = method
 
     def count_nodes(self):
-        count = 1  # Conta o nó atual
+        count = 1
         for child in self.children:
             count += child.count_nodes()
         return count
@@ -40,7 +41,7 @@ class c45Node:
         att = None
         minEntropy = None
         minEntropyThreshold = None
-        for i in range(1, len(self.data[0])-2): # Ignora o ID e a classe
+        for i in range(1, len(self.data[0])-2):
             self.data = sorted(self.data, key=lambda x: x[i])
             threshold = self.calcThreshold(i, method=self.method)
             if threshold is None:
@@ -59,7 +60,6 @@ class c45Node:
         if att is None:
             return
         self.attribute = att
-        #print(f"Dividindo no atributo {att} com threshold {minEntropyThreshold} (entropia: {minEntropy})")
         self.threshold = minEntropyThreshold
         if len(left) == 0 or len(right) == 0:
             self.classification = get_majority_class(self.data)
@@ -68,12 +68,12 @@ class c45Node:
         for child in self.children:
             child.build_tree()
 
-    def calcThreshold(self, attribute, method='median'):
-        if method == 'median':
+    def calcThreshold(self, attribute, method='mediana'):
+        if method == 'mediana':
             return self.calcMedThreshold(attribute)
-        elif method == 'average':
+        elif method == 'média':
             return self.calcAvgThreshold(attribute)
-        elif method == 'entropy':
+        elif method == 'ganho de informação':
             return self.calcEntThreshold(attribute)
         else:
             raise ValueError("Método de cálculo de threshold desconhecido: {}".format(method))
@@ -153,14 +153,13 @@ def validate(data, tree):
     for i in range(len(data)):
         if int(tree.classify(data[i])) == int(data[i][-1]):
             correct += 1
-        #print(f"Classificando {i+1}/{len(data)}: {data[i]} -> {tree.classify(data[i])} (esperado: {data[i][-1]})")
     return correct / len(data)
-
 
 def pruning(tree, confidence=0.75, z=None):
     global NOS_PODADOS
     if z is None:
-        z = norm.ppf((1 + confidence) / 2)  # valor z do intervalo de confiança
+        z = norm.ppf((1 + confidence) / 2)
+        # print(f"Z-score for confidence {confidence}: {z}")
 
     for child in tree.children:
         pruning(child, confidence, z)
@@ -181,7 +180,6 @@ def pruning(tree, confidence=0.75, z=None):
             tree.classification = majority_class
             NOS_PODADOS += 1
 
-
 def get_majority_class(data):
     labels = [row[-1] for row in data]
     return Counter(labels).most_common(1)[0][0]
@@ -197,27 +195,14 @@ def count_subtree_errors(tree):
         return sum(1 for row in tree.data if row[-1] != tree.classification)
     return sum(count_subtree_errors(child) for child in tree.children)
 
-
-def classify_row(tree, row):
-    while tree.children:
-        if row[tree.attribute] < tree.threshold:
-            tree = tree.children[0]
-        else:
-            tree = tree.children[1]
-    return tree.classification
-
-
 def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
     global NOS_PODADOS
     data = pd.read_csv(data_path).values
     training_percentages = [0.1, 0.3, 0.5, 0.7, 0.9]
-    methods = ['median', 'average', 'entropy']
+    methods = ['mediana', 'média', 'ganho de informação']
     confidence = 0.69
-    maxDepth_values = [1, 3, 6, 9, 12, 15, 18, 21]  # Vários máximos de profundidade para comparar
+    maxDepth_values = [1, 3, 6, 9, 12, 15, 18, 21]
 
-    os.makedirs("graficos/c45", exist_ok=True)
-
-    # Estrutura: resultados[method][maxDepth]['antes' ou 'depois'][i] = acurácia na i-ésima porcentagem
     resultados = {
         method: {
             maxDepth: {'antes': [], 'depois': []} for maxDepth in maxDepth_values
@@ -225,15 +210,14 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
         for method in methods
     }
 
+    # Criar diretório para salvar os gráficos
+    os.makedirs("graficos/c45", exist_ok=True)
+
     for method in methods:
         for maxDepth in maxDepth_values:
             for perc in training_percentages:
                 treino = data[:int(len(data)*perc)]
                 teste = data[int(len(data)*perc):]
-
-                split_index = int(len(treino) * 0.7)
-                # treino_construcao = treino[:split_index]
-                # treino_validacao = treino[split_index:]
 
                 tree = c45Node(treino, maxDepth=maxDepth, method=method)
                 tree.build_tree()
@@ -242,13 +226,12 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
                 NOS_PODADOS = 0
                 pruning(tree, confidence=confidence)
                 acc_depois = validate(teste, tree)
-                print(f"Número de nós podados: {NOS_PODADOS}")
+
                 resultados[method][maxDepth]['antes'].append(acc_antes)
                 resultados[method][maxDepth]['depois'].append(acc_depois)
 
-        # Agora plota um gráfico por método com linhas para cada maxDepth
+        # Plotar gráfico para cada método com linhas para cada profundidade
         plt.figure(figsize=(10, 6))
-
         for maxDepth in maxDepth_values:
             plt.plot(training_percentages, 
                      [x * 100 for x in resultados[method][maxDepth]['antes']], 
@@ -263,9 +246,108 @@ def testar_variacoes(data_path="dataset/treino_sinais_vitais_com_label.csv"):
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f"graficos/c45/{method}_acuracia_comparativa.png")
+        plt.savefig(f"graficos/c45/{method.replace(' ', '_')}_acuracia_comparativa.png")
         plt.close()
 
+    return resultados, training_percentages, maxDepth_values, data
+
+
+import os
+
+def plot_comparacao_maior_profundidade(resultados, training_percentages, maxDepth_values):
+    max_depth = max(maxDepth_values)
+    methods = ['mediana', 'média', 'ganho de informação']
+
+    os.makedirs('graficos', exist_ok=True)
+
+    plt.figure(figsize=(10, 6))
+    for method in methods:
+        acc_antes = [x * 100 for x in resultados[method][max_depth]['antes']]
+        acc_depois = [x * 100 for x in resultados[method][max_depth]['depois']]
+        plt.plot(training_percentages, acc_antes, linestyle='--', label=f'{method} antes poda')
+        plt.plot(training_percentages, acc_depois, linestyle='-', label=f'{method} depois poda')
+
+    plt.title(f'Acurácia x Porcentagem de Treino - Maior Profundidade ({max_depth})')
+    plt.xlabel('Porcentagem de treino')
+    plt.ylabel('Acurácia (%)')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f'graficos/c45/acuracia_porcentagem_treino_profundidade_{max_depth}.png')
+    plt.close()
+
+def plot_confianca_vs_acuracia(data, maxDepth, method, training_percent=0.5):
+    confidences = np.linspace(0.1, 0.99, 10)
+    acuracias = []
+
+    treino = data[:int(len(data)*training_percent)]
+    teste = data[int(len(data)*training_percent):]
+
+    for conf in confidences:
+        global NOS_PODADOS
+        NOS_PODADOS = 0
+        tree = c45Node(treino, maxDepth=maxDepth, method=method)
+        tree.build_tree()
+        pruning(tree, confidence=conf)
+        acc = validate(teste, tree)
+        acuracias.append(acc * 100)
+        # print(f"Confiança: {conf:.2f}, Acurácia: {acc * 100:.2f}%, Nós podados: {NOS_PODADOS}")
+
+    os.makedirs('graficos', exist_ok=True)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(confidences, acuracias, marker='o')
+    plt.title(f'Acurácia x Nível de Confiança (método: {method}, profundidade: {maxDepth})')
+    plt.xlabel('Nível de Confiança')
+    plt.ylabel('Acurácia (%)')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f'graficos/c45/acuracia_confianca_metodo_{method}_profundidade_{maxDepth}.png')
+    plt.close()
+
+from sklearn.metrics import confusion_matrix
+
+def salvar_matriz_confusao_csv(matrix, classes, arquivo):
+    df_cm = pd.DataFrame(matrix, index=classes, columns=classes)
+    df_cm.to_csv(arquivo)
+
+def gerar_matrizes_confusao(data_path="dataset/treino_sinais_vitais_com_label.csv"):
+    data = pd.read_csv(data_path).values
+    methods = ['mediana', 'média', 'ganho de informação']
+    maxDepth = 21  # maior profundidade
+    training_percent = 0.5  # maior treino para melhor treino
+    
+    treino = data[:int(len(data)*training_percent)]
+    teste = data[int(len(data)*training_percent):]
+
+    classes = sorted(set(teste[:, -1]))  # classes únicas ordenadas
+
+    os.makedirs("matrizes_confusao", exist_ok=True)
+
+    for method in methods:
+        tree = c45Node(treino, maxDepth=maxDepth, method=method)
+        tree.build_tree()
+        
+        # Previsões antes da poda
+        preds = []
+        for row in teste:
+            pred = tree.classify(row)
+            preds.append(int(pred))
+        preds = np.array(preds)
+        
+        y_true = teste[:, -1].astype(int)
+        
+        cm = confusion_matrix(y_true, preds, labels=classes)
+        
+        arquivo = f"matrizes_confusao/matriz_confusao_{method}_prof{maxDepth}_antes_poda.csv"
+        salvar_matriz_confusao_csv(cm, classes, arquivo)
 
 if __name__ == "__main__":
-    testar_variacoes()
+    # resultados, training_percentages, maxDepth_values, data = testar_variacoes()
+    # plot_comparacao_maior_profundidade(resultados, training_percentages, maxDepth_values)
+    data = pd.read_csv("dataset/treino_sinais_vitais_com_label.csv").values
+    # Ajuste aqui para o método e profundidade do melhor resultado que você encontrar:
+    melhor_metodo = 'ganho de informação'
+    melhor_profundidade = 21
+    plot_confianca_vs_acuracia(data, 5, melhor_metodo, training_percent=0.5)
+    # gerar_matrizes_confusao(data_path="dataset/treino_sinais_vitais_com_label.csv")
